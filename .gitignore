@@ -1,0 +1,56 @@
+**/target
+**/.idea
+**/.DS_Store
+
+**/web/admin/node_modules
+**/web/admin/dist
+**/web/h5/node_modules
+**/web/h5/dist
+
+target/**
+!.mvn/wrapper/maven-wrapper.jar
+!**/src/main/**/target/
+!**/src/test/**/target/
+
+
+### IntelliJ IDEA ###
+.idea/modules.xml
+.idea/compiler.xml
+.idea/encodings.xml
+.idea/misc.xml
+.idea/jarRepositories.xml
+.idea/libraries/
+*.iws
+*.iml
+*.ipr
+**/logs
+
+### Eclipse ###
+.apt_generated
+.classpath
+.factorypath
+.project
+.settings
+.springBeans
+.sts4-cache
+
+### NetBeans ###
+/nbproject/private/
+/nbbuild/
+/dist/
+/nbdist/
+/.nb-gradle/
+build/
+!**/src/main/**/build/
+!**/src/test/**/build/
+!**/**/src/main/**/build/
+!**/**/src/test/**/build/
+
+### VS Code ###
+.vscode/
+
+### Mac OS ###
+.DS_Store
+.idea/misc.xml
+.idea/vcs.xml
+.idea/vcs.xml

@@ -1,0 +1,813 @@
+package com.evcharge.entity.station;
+
+
+import com.alibaba.fastjson2.JSONObject;
+import com.evcharge.entity.chargecard.ChargeCardConfigEntity;
+import com.evcharge.entity.chargecard.UserChargeCardEntity;
+import com.evcharge.entity.consumecenter.order.ConsumeOrderRefundsEntity;
+import com.evcharge.entity.consumecenter.order.ConsumeOrdersEntity;
+import com.evcharge.entity.device.DeviceEntity;
+import com.evcharge.entity.device.DeviceSocketEntity;
+import com.evcharge.entity.device.MonitorDeviceEntity;
+import com.evcharge.entity.sys.SysGlobalConfigEntity;
+import com.evcharge.entity.user.UserEntity;
+import com.evcharge.rocketmq.XRocketMQ;
+import com.evcharge.rocketmq.consumer.v2.ChargeStationXRocketMQConsumerV2;
+import com.xyzs.entity.BaseEntity;
+
+import java.io.Serializable;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.util.*;
+
+import com.xyzs.entity.SyncResult;
+import com.xyzs.utils.*;
+import lombok.Getter;
+import lombok.Setter;
+
+/**
+ * 充电桩汇总v2;
+ *
+ * @author : JED
+ * @date : 2024-6-26
+ */
+@Getter
+@Setter
+public class ChargeStationSummaryV2Entity extends BaseEntity implements Serializable {
+    //region -- 实体类属性 --
+    /**
+     * id
+     */
+    private long id;
+    /**
+     * 充电站ID
+     */
+    private String CSId;
+    /**
+     * 组织代码
+     */
+    private String organize_code;
+    /**
+     * 累计的注册用户数
+     */
+    private int total_registered_users;
+    /**
+     * 充电网络主机数
+     */
+    private int total_host_device_count;
+    /**
+     * 充电终端数
+     */
+    private int total_charge_device_count;
+    /**
+     * 总的插座
+     */
+    private int total_socket;
+    /**
+     * 端口运行时间(秒)
+     */
+    private long total_socket_run_time;
+    /**
+     * 累计使用次数
+     */
+    private long total_use_count;
+    /**
+     * 累计安全预警次数
+     */
+    private long total_use_error;
+    /**
+     * 累计耗电量（度）
+     */
+    private BigDecimal total_power_consumption;
+    /**
+     * 累计充电时长(秒)
+     */
+    private long total_charge_time;
+    /**
+     * 充电位使用中数量
+     */
+    private int device_socket_using_count;
+    /**
+     * 充电位空闲中数量
+     */
+    private int device_socket_idle_count;
+    /**
+     * 充电位占用中数量
+     */
+    private int device_socket_occupied_count;
+    /**
+     * 充电位异常数量
+     */
+    private int device_socket_error_count;
+    /**
+     * 监视器设备数
+     */
+    private int monitor_total_count;
+    /**
+     * 监视器在线数
+     */
+    private int monitor_online_count;
+    /**
+     * 计次充电的次数
+     */
+    private int pay_per_charge_count;
+    /**
+     * 计次充电的人数
+     */
+    private int pay_per_charge_users;
+    /**
+     * 计次充电的时长(秒)
+     */
+    private long pay_per_charge_duration;
+    /**
+     * 计次充电消费金额
+     */
+    private BigDecimal pay_per_charge_amount;
+    /**
+     * 计次充电消费调整金额（计算内部用户、合作用户之类的金额）
+     */
+    private BigDecimal pay_per_adjustment_charge_amount;
+    /**
+     * 充电卡充电的次数
+     */
+    private int card_charge_count;
+    /**
+     * 充电卡充电的人数
+     */
+    private int card_charge_users;
+    /**
+     * 充电卡充电的时长(秒)
+     */
+    private long card_charge_duration;
+    /**
+     * 充电卡消耗时间(秒)
+     */
+    private BigDecimal card_charge_consume_time;
+    /**
+     * 充电卡消费金额
+     */
+    private BigDecimal card_charge_amount;
+    /**
+     * 充电卡消费调整金额（计算内部用户、合作用户之类的金额）
+     */
+    private BigDecimal card_adjustment_charge_amount;
+    /**
+     * 充值订单数
+     */
+    private int recharge_order_count;
+    /**
+     * 充值金额（毛）
+     */
+    private BigDecimal recharge_amount;
+    /**
+     * 充值人数
+     */
+    private int recharge_users;
+    /**
+     * 充值退款订单数
+     */
+    private int recharge_refund_order_count;
+    /**
+     * 充值退款订单金额
+     */
+    private BigDecimal recharge_refund_amount;
+    /**
+     * 充电卡订单数
+     */
+    private int charge_card_order_count;
+    /**
+     * 充电卡金额（毛）
+     */
+    private BigDecimal charge_card_amount;
+    /**
+     * 充电卡人数
+     */
+    private int charge_card_users;
+    /**
+     * 充电卡退款订单数
+     */
+    private int charge_card_refund_order_count;
+    /**
+     * 充电卡退款订单金额
+     */
+    private BigDecimal charge_card_refund_amount;
+    /**
+     * (次/插座)次数使用率（APR）：当月充电次数 / 全平台运行中的充电端口
+     */
+    private double charge_count_use_rate;
+    /**
+     * (%)时长使用率（APR）：当月充电时长「秒数」 / （不含私有桩）(充电桩A总端口运行时间 + 充电桩B总端口运行时间...)
+     */
+    private double charge_time_use_rate;
+    /**
+     * 创造的收益(元/日/插座): 每日净收入的平均值
+     */
+    private double net_income;
+    /**
+     * 累计创造的收益(元/插座): 每日净收入的合计
+     */
+    private double total_net_income;
+    /**
+     * 有充值或购买充电卡的用户数
+     */
+    private int payment_user_count;
+    /**
+     * 有充值或购买充电卡但没有充电的用户数
+     */
+    private int idle_user_count;
+    /**
+     * 最小功率
+     */
+    private double min_power;
+    /**
+     * 最大功率
+     */
+    private double max_power;
+    /**
+     * 平均功率
+     */
+    private double avg_power;
+    /**
+     * 创建时间戳
+     */
+    private long create_time;
+    /**
+     * 更新时间戳
+     */
+    private long update_time;
+
+    //endregion
+
+    /**
+     * 获得一个实例
+     */
+    public static ChargeStationSummaryV2Entity getInstance() {
+        return new ChargeStationSummaryV2Entity();
+    }
+
+    private final static String TAG = "充电桩汇总v2";
+
+    /**
+     * 获取站点统计信息
+     *
+     * @param CSId 站点id
+     * @return
+     */
+    public ChargeStationSummaryV2Entity getWithCSId(String CSId) {
+        return getWithCSId(CSId, true);
+    }
+
+    /**
+     * 获取站点统计信息
+     *
+     * @param CSId    站点id
+     * @param inCache 优先从缓存中获取
+     * @return
+     */
+    public ChargeStationSummaryV2Entity getWithCSId(String CSId, boolean inCache) {
+        if (inCache) this.cache(String.format("SummaryV2:%s:Detail", CSId));
+        return this.where("CSId", CSId)
+                .findEntity();
+    }
+
+    /**
+     * 同步数据
+     */
+    public SyncResult syncTaskJob(String CSId) {
+        if (!StringUtil.hasLength(CSId)) return new SyncResult(2, "缺少充电站ID");
+        // 充电桩信息
+        ChargeStationEntity chargeStationEntity = ChargeStationEntity.getInstance().where("CSId", CSId).findEntity();
+        if (chargeStationEntity == null || chargeStationEntity.id == 0) return new SyncResult(1, "");
+
+        LogsUtil.info(TAG, "[%s-%s] 正在统计数据...", CSId, StringUtil.removeLineBreaksAndSpaces(chargeStationEntity.name));
+
+        try {
+            Map<String, Object> data = new LinkedHashMap<>();
+            data.put("CSId", CSId);
+            data.put("organize_code", chargeStationEntity.organize_code);
+
+            String UserTableName = UserEntity.getInstance().theTableName();
+            String DeviceTableName = DeviceEntity.getInstance().theTableName();
+
+            //region 累计的注册用户数
+            long total_registered_users = UserEntity.getInstance()
+                    .where("cs_id", CSId)
+                    .count("1");
+            data.put("total_registered_users", total_registered_users);
+            //endregion
+
+            //region 充电主机数、充电终端数、总的插座
+            //充电网络主机数
+            int total_host_device_count = 0;
+            int total_charge_device_count = 0;
+            int total_socket = 0;
+            //充电主机数
+            total_host_device_count = DeviceEntity.getInstance()
+                    .where("CSId", CSId)
+                    .where("isHost", 1)
+                    .count("1");
+
+            //充电终端数
+            total_charge_device_count = DeviceEntity.getInstance()
+                    .where("CSId", CSId)
+                    .where("isHost", 0)
+                    .count("1");
+
+            //总电位数
+            total_socket = DeviceSocketEntity.getInstance()
+                    .alias("ds")
+                    .join(DeviceTableName, "d", "ds.deviceId = d.id")
+                    .where("d.CSId", CSId)
+                    .count("1");
+            data.put("total_host_device_count", total_host_device_count);
+            data.put("total_charge_device_count", total_charge_device_count);
+            data.put("total_socket", total_socket);
+            //endregion
+
+            //顺便同步一下数据
+            ChargeStationEntity.getInstance().syncSocketCount(chargeStationEntity.CSId);
+
+            //累计使用次数
+            long total_use_count = 0;
+            //region 累计使用次数、累计耗电量（度）
+            Map<String, Object> sumCount = ChargeOrderEntity.getInstance()
+                    .field("COUNT(1) AS total_use_count,IFNULL(SUM(powerConsumption),0) AS total_power_consumption")
+                    .where("CSId", CSId)
+                    .where("status", 2)
+                    .where("isTest", 0)
+                    .find();
+            total_use_count = MapUtil.getLong(sumCount, "total_use_count");
+            //累计使用次数
+            data.put("total_use_count", total_use_count);
+            //累计耗电量（度）
+            data.put("total_power_consumption", sumCount.get("total_power_consumption"));
+            //endregion
+
+            //region累计安全预警次数
+            long total_use_error = ChargeOrderEntity.getInstance()
+                    .where("CSId", CSId)
+                    .where("status", 2)
+                    .where("isTest", 0)
+                    .whereIn("stopReasonCode", "-1,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20")
+                    .countGetLong("1");
+            data.put("total_use_error", total_use_error);
+            //endregion
+
+            //端口运行时间（秒级）
+            long total_socket_run_time = 0;
+            //监视器设备数
+            int monitor_total_count = 0;
+            //监视器在线数
+            int monitor_online_count = 0;
+
+            // region 充电位 使用中、空闲中、占用中、异常数量
+            int device_socket_using_count = 0;
+            int device_socket_idle_count = 0;
+            int device_socket_occupied_count = 0;
+            int device_socket_error_count = 0;
+
+            //充电位使用中数量
+            device_socket_using_count = DeviceSocketEntity.getInstance()
+                    .alias("ds")
+                    .join(DeviceTableName, "d", "ds.deviceId = d.id")
+                    .where("d.CSId", CSId)
+                    .whereIn("status", "1,5")//状态：0=空闲，1=充电中，2=未启动充电，3=已充满电，4=故障，5=浮充
+                    .count();
+            //充电位空闲中数量
+            device_socket_idle_count = DeviceSocketEntity.getInstance()
+                    .alias("ds")
+                    .join(DeviceTableName, "d", "ds.deviceId = d.id")
+                    .where("d.CSId", CSId)
+                    .where("status", 0)//状态：0=空闲，1=充电中，2=未启动充电，3=已充满电，4=故障，5=浮充
+                    .count();
+            //充电位占用中数量
+            device_socket_occupied_count = DeviceSocketEntity.getInstance()
+                    .alias("ds")
+                    .join(DeviceTableName, "d", "ds.deviceId = d.id")
+                    .where("d.CSId", CSId)
+                    .whereIn("status", "2,3")//状态：0=空闲，1=充电中，2=未启动充电，3=已充满电，4=故障，5=浮充
+                    .count();
+            //充电位异常数量
+            device_socket_error_count = DeviceSocketEntity.getInstance()
+                    .alias("ds")
+                    .join(DeviceTableName, "d", "ds.deviceId = d.id")
+                    .where("d.CSId", CSId)
+                    .where("status", 4)//状态：0=空闲，1=充电中，2=未启动充电，3=已充满电，4=故障，5=浮充
+                    .count();
+
+            data.put("device_socket_using_count", device_socket_using_count);
+            data.put("device_socket_idle_count", device_socket_idle_count);
+            data.put("device_socket_occupied_count", device_socket_occupied_count);
+            data.put("device_socket_error_count", device_socket_error_count);
+            // endregion
+
+            //region 监视器设备数、监视器在线数
+            monitor_total_count = MonitorDeviceEntity.getInstance()
+                    .where("CSId", CSId)
+                    .where("status", ">=", 0)//状态：-1-删除，0-离线，1-在线
+                    .count();
+
+            monitor_online_count = MonitorDeviceEntity.getInstance()
+                    .where("CSId", CSId)
+                    .where("status", 1)//状态：-1-删除，0-离线，1-在线
+                    .count();
+            data.put("monitor_total_count", monitor_total_count);
+            data.put("monitor_online_count", monitor_online_count);
+            //endregion
+
+            BigDecimal pay_per_charge_amount = new BigDecimal(0);
+            //region 计次充电的次数、计次充电的人数、计次充电消费金额、计次充电的时长
+            Map<String, Object> pay_per_charge_data = ChargeOrderEntity.getInstance()
+                    .field("COUNT(1) AS pay_per_charge_count"
+                            + ",COUNT(DISTINCT uid) AS pay_per_charge_users"
+                            + ",IFNULL(SUM(totalAmount),0) AS pay_per_charge_amount")
+                    .where("CSId", CSId)
+                    .where("status", 2)
+                    .where("paymentTypeId", 1)//支付方式：1=余额，2=充电卡
+                    .where("isTest", 0)
+                    .find();
+
+            //计次充电的次数
+            data.put("pay_per_charge_count", pay_per_charge_data.get("pay_per_charge_count"));
+            //计次充电的人数
+            data.put("pay_per_charge_users", pay_per_charge_data.get("pay_per_charge_users"));
+            //计次充电消费金额
+            pay_per_charge_amount = MapUtil.getBigDecimal(pay_per_charge_data, "pay_per_charge_amount");
+            data.put("pay_per_charge_amount", pay_per_charge_amount);
+
+            //计次充电的时长
+            long pay_per_charge_duration = 0;
+            {
+                Map<String, Object> chargeTimeData = ChargeOrderEntity.getInstance()
+                        .field("IFNULL(SUM(stopTime - startTime),0) AS chargeTime")
+                        .where("CSId", CSId)
+                        .where("status", 2)
+                        .where("paymentTypeId", 1)//支付方式：1=余额，2=充电卡
+                        .where("isTest", 0)
+                        .where("stopTime", ">", 0)
+                        .find();
+                long chargeTime = MapUtil.getLong(chargeTimeData, "chargeTime");
+                if (chargeTime > 0) {
+                    pay_per_charge_duration = chargeTime / 1000;
+                }
+                data.put("pay_per_charge_duration", pay_per_charge_duration);
+            }
+            //endregion
+            BigDecimal pay_per_adjustment_charge_amount = new BigDecimal(0);
+            //region 计次充电消费调整金额（计算内部用户、合作用户之类的金额）
+            Map<String, Object> pay_per_adjustment_charge_amount_data = ChargeOrderEntity.getInstance()
+                    .field("IFNULL(SUM(totalAmount),0) AS pay_per_adjustment_charge_amount")
+                    .alias("co")
+                    .join(UserTableName, "u", "u.id = co.uid")
+                    .where("co.CSId", CSId)
+                    .where("co.status", 2)
+                    .where("co.paymentTypeId", 1)//支付方式：1=余额，2=充电卡
+                    .where("co.isTest", 0)
+                    .where("u.is_robot", 3)
+                    .find();
+            pay_per_adjustment_charge_amount = MapUtil.getBigDecimal(pay_per_adjustment_charge_amount_data, "pay_per_adjustment_charge_amount", 4, RoundingMode.HALF_UP, new BigDecimal(0));
+            data.put("pay_per_adjustment_charge_amount", pay_per_adjustment_charge_amount);
+            //endregion
+
+            //region 充电卡充电的次数、充电卡充电的人数、充电卡消费金额、充电卡充电的时长
+            Map<String, Object> card_charge_data = ChargeOrderEntity.getInstance()
+                    .field("COUNT(1) AS card_charge_count"
+                            + ",COUNT(DISTINCT uid) AS card_charge_users"
+                            + ",IFNULL(SUM(chargeCardConsumeAmount),0) AS card_charge_amount")
+                    .where("CSId", CSId)
+                    .where("status", 2)
+                    .where("paymentTypeId", 2)//支付方式：1=余额，2=充电卡
+                    .where("isTest", 0)
+                    .find();
+
+            //充电卡充电的次数
+            data.put("card_charge_count", card_charge_data.get("card_charge_count"));
+            //充电卡充电的人数
+            data.put("card_charge_users", card_charge_data.get("card_charge_users"));
+            //充电卡消费金额
+            BigDecimal card_charge_amount = MapUtil.getBigDecimal(card_charge_data, "card_charge_amount", 4, RoundingMode.HALF_UP);
+            data.put("card_charge_amount", card_charge_amount);
+
+            //充电卡充电的时长
+            long card_charge_duration = 0;
+            {
+                Map<String, Object> chargeTimeData = ChargeOrderEntity.getInstance()
+                        .field("IFNULL(SUM(stopTime - startTime),0) AS chargeTime")
+                        .where("CSId", CSId)
+                        .where("status", 2)
+                        .where("paymentTypeId", 2)//支付方式：1=余额，2=充电卡
+                        .where("isTest", 0)
+                        .where("stopTime", ">", 0)
+                        .find();
+                long chargeTime = MapUtil.getLong(chargeTimeData, "chargeTime");
+                if (chargeTime > 0) {
+                    card_charge_duration = chargeTime / 1000;
+                }
+                data.put("card_charge_duration", card_charge_duration);
+            }
+            //endregion
+            BigDecimal card_adjustment_charge_amount = new BigDecimal(0);
+            //region 充电卡消费调整金额（计算内部用户、合作用户之类的金额）
+            Map<String, Object> card_adjustment_charge_amount_data = ChargeOrderEntity.getInstance()
+                    .field("IFNULL(SUM(chargeCardConsumeAmount), 0) AS card_adjustment_charge_amount")
+                    .alias("co")
+                    .join(UserChargeCardEntity.getInstance().theTableName(), "ucc", "co.cardNumber = ucc.cardNumber")
+                    .join(ChargeCardConfigEntity.getInstance().theTableName(), "ccc", "ccc.id = ucc.cardConfigId")
+                    .where("co.CSId", CSId)
+                    .where("co.status", 2)
+                    .where("co.paymentTypeId", 2)
+                    .where("co.isTest", 0)
+                    .whereIn("ccc.usageType", "'staff', 'partners'")
+                    .find();
+            card_adjustment_charge_amount = MapUtil.getBigDecimal(card_adjustment_charge_amount_data, "card_adjustment_charge_amount", 4, RoundingMode.HALF_UP, new BigDecimal(0));
+            data.put("card_adjustment_charge_amount", card_adjustment_charge_amount);
+            //endregion
+
+            //region 充电卡消耗时间(秒)
+            BigDecimal card_charge_consume_time = ChargeOrderEntity.getInstance()
+                    .where("CSId", CSId)
+                    .where("status", 2)
+                    .where("isTest", 0)
+                    .where("paymentTypeId", 2)//支付方式：1=余额，2=充电卡
+                    .sumGetBigDecimal("chargeCardConsumeTime");
+            data.put("card_charge_consume_time", card_charge_consume_time);
+            //endregion
+
+            //region 累计充电时长
+            long total_charge_time = pay_per_charge_duration + card_charge_duration;
+            data.put("total_charge_time", total_charge_time);
+            //endregion
+
+            //充值金额
+            BigDecimal recharge_amount = new BigDecimal(0);
+            //充值退款金额
+            BigDecimal recharge_refund_amount = new BigDecimal(0);
+            //充电卡金额
+            BigDecimal charge_card_amount = new BigDecimal(0);
+            //充电卡退款金额
+            BigDecimal charge_card_refund_amount = new BigDecimal(0);
+            //应税收入（总充电消费金额），公式：计次充电消费+充电卡金额-充电卡退款金额
+            BigDecimal taxable_income = new BigDecimal(0);
+
+            //region 充值订单数、充值金额、充值人数、充值退款订单数、充值退款订单金额
+
+            //充值订单数次数、总充值金额
+//            Map<String, Object> rechargeData = RechargeOrderEntity.getInstance()
+//                    .field("IFNULL(COUNT(1),0) as recharge_order_count"
+//                            + ",IFNULL(COUNT(DISTINCT uid),0) AS recharge_users"
+//                            + ",IFNULL(SUM(pay_price),0) AS recharge_amount")
+//                    .where("CSId", CSId)
+//                    .where("status", 2) //状态;1=未支付 2=已完成 -1=已取消，3=全额退款（已屏蔽），4=部分退款（已屏蔽）
+//                    .where("isTest", 0)
+//                    .find();
+            Map<String, Object> rechargeData = ConsumeOrdersEntity.getInstance()
+                    .field("IFNULL(COUNT(1),0) as recharge_order_count"
+                            + ",IFNULL(COUNT(DISTINCT uid),0) AS recharge_users"
+                            + ",IFNULL(SUM(order_price),0) AS recharge_amount")
+                    .where("CSId", CSId)
+                    .where("product_type", "recharge")
+                    .where("payment_status", 2) // 支付状态;1=未支付 2=已完成 -1=已取消
+                    .find();
+            //充值金额
+            recharge_amount = MapUtil.getBigDecimal(rechargeData, "recharge_amount");
+            data.put("recharge_amount", recharge_amount);
+            data.put("recharge_order_count", rechargeData.get("recharge_order_count"));//充值订单数
+            data.put("recharge_users", rechargeData.get("recharge_users"));//充值人数
+
+            //充值退款订单数、退款订单金额
+//            Map<String, Object> recharge_refund_data = RechargeRefundOrderEntity.getInstance()
+//                    .field("IFNULL(COUNT(1),0) as refund_order_count,IFNULL(SUM(refund_amount),0) AS refund_amount")
+//                    .where("CSId", CSId)
+//                    .where("refund_status", "2") //状态：0-待处理，1-处理中，2-已完成，3-已取消，4-失败，5-部分退款，6-全额退款，7-审核中，8-审核失败
+//                    .where("isTest", 0)
+//                    .find();
+            Map<String, Object> rechargeRefundData = ConsumeOrderRefundsEntity.getInstance()
+                    .field("IFNULL(COUNT(1),0) as refund_order_count,IFNULL(SUM(refund_amount),0) AS refund_amount")
+                    .alias("cor")
+                    .join(ConsumeOrdersEntity.getInstance().theTableName(), "co", "cor.order_sn = co.order_sn")
+                    .where("co.CSId", CSId)
+                    .where("co.product_type", "recharge")
+                    .where("cor.status", "SUCCESS") // 退款状态 PENDING SUCCESS FAILED;
+                    .find();
+            recharge_refund_amount = MapUtil.getBigDecimal(rechargeRefundData, "refund_amount");
+            data.put("recharge_refund_amount", recharge_refund_amount);//充值退款订单金额
+            data.put("recharge_refund_order_count", rechargeRefundData.get("refund_order_count"));//充值退款订单数
+
+            //endregion
+
+            //region 充电卡订单数、充电卡金额、充电卡人数、充电卡退款订单数、充电卡退款订单金额
+
+//            Map<String, Object> chargeCardOrderData = UserChargeCardOrderEntity.getInstance()
+//                    .field("IFNULL(COUNT(1),0) as charge_card_order_count"
+//                            + ",IFNULL(COUNT(DISTINCT uid),0) AS charge_card_users"
+//                            + ",IFNULL(SUM(totalAmount),0) AS charge_card_amount")
+//                    .where("CSId", CSId)
+//                    .where("status", 1) //状态;0=等待支付，1=支付成功，2=全额退款（已屏蔽），3=部分退款（已屏蔽）
+//                    .where("isTest", 0)
+//                    .find();
+            Map<String, Object> chargeCardOrderData = ConsumeOrdersEntity.getInstance()
+                    .field("IFNULL(COUNT(1),0) as charge_card_order_count"
+                            + ",IFNULL(COUNT(DISTINCT uid),0) AS charge_card_users"
+                            + ",IFNULL(SUM(order_price),0) AS charge_card_amount")
+                    .where("CSId", CSId)
+                    .where("payment_status", 2) // 支付状态;1=未支付 2=已完成 -1=已取消
+                    .where("product_type", "charge_card")
+                    .find();
+            //充电卡金额
+            charge_card_amount = MapUtil.getBigDecimal(chargeCardOrderData, "charge_card_amount");
+            data.put("charge_card_amount", charge_card_amount);
+            data.put("charge_card_order_count", chargeCardOrderData.get("charge_card_order_count"));//充电卡订单数
+            data.put("charge_card_users", chargeCardOrderData.get("charge_card_users"));//充电卡人数
+
+            //充电卡退款订单数、退款订单金额
+//            Map<String, Object> chargeCardRefundOrderData = UserChargeCardRefundOrderEntity.getInstance()
+//                    .field("IFNULL(COUNT(1),0) as refund_order_count,IFNULL(SUM(refund_amount),0) AS refund_amount")
+//                    .where("CSId", CSId)
+//                    .where("refund_status", "2") //状态：0-待处理，1-处理中，2-已完成，3-已取消，4-失败，5-部分退款，6-全额退款，7-审核中，8-审核失败
+//                    .where("isTest", 0)
+//                    .find();
+            Map<String, Object> chargeCardRefundOrderData = ConsumeOrderRefundsEntity.getInstance()
+                    .field("IFNULL(COUNT(1),0) as refund_order_count,IFNULL(SUM(refund_amount),0) AS refund_amount")
+                    .alias("cor")
+                    .join(ConsumeOrdersEntity.getInstance().theTableName(),"co","cor.order_sn = co.order_sn")
+                    .where("co.CSId", CSId)
+                    .where("co.product_type", "charge_card")
+                    .where("cor.status", "SUCCESS") // 退款状态 PENDING SUCCESS FAILED;
+                    .find();
+            charge_card_refund_amount = MapUtil.getBigDecimal(chargeCardRefundOrderData, "refund_amount");
+            data.put("charge_card_refund_amount", charge_card_refund_amount);//充电卡退款订单金额
+            data.put("charge_card_refund_order_count", MapUtil.getInt(chargeCardRefundOrderData, "refund_order_count"));//充电卡退款订单数
+
+            //endregion
+
+            //此充电桩运行中的充电端口
+            if (total_socket > 0) {
+                //region (次/插座)次数使用率（APR）：所有充电次数 / 全平台运行中的充电端口（不含私有桩）
+                BigDecimal charge_count_use_rate = BigDecimal.valueOf(total_use_count)
+                        .divide(BigDecimal.valueOf(total_socket), 6, RoundingMode.HALF_UP);
+                data.put("charge_count_use_rate", charge_count_use_rate);
+                //endregion
+
+                //region (%)时长使用率（APR）：所有充电时长「秒数」 / （不含私有桩）(充电桩的运营时间 * 端口数)
+                //先判断此充电桩上线是否在统计时间内，不在的话，则不进行统计(这里实际永远不会出现，除非有人设定好上线时间)
+                if (chargeStationEntity.online_time <= TimeUtil.getTimestamp()) {
+                    //端口运行时间 = 充电桩的运营时间 * 端口数   注意时间戳为毫秒级
+                    total_socket_run_time += (TimeUtil.getTimestamp() - chargeStationEntity.online_time) / 1000 * total_socket;
+                }
+                //  时长使用率（APR） = 所有充电时长「秒数」 / 端口运行时间「秒数」
+                BigDecimal charge_time_use_rate = new BigDecimal(0);
+                if (total_charge_time > 0) {
+                    charge_time_use_rate = new BigDecimal(total_charge_time)
+                            .divide(new BigDecimal(total_socket_run_time), 6, RoundingMode.HALF_UP);
+                }
+                data.put("total_socket_run_time", total_socket_run_time);
+                data.put("charge_time_use_rate", charge_time_use_rate);
+                //endregion
+
+                //region 端口平均收益金额(元/插座) | 端口平均消费金额(元/插座)
+                Map<String, Object> daySummaryData = ChargeStationDaySummaryV2Entity.getInstance()
+                        .field("IFNULL(AVG(net_income),0) AS net_income,IFNULL(AVG(socket_consumption),0) AS socket_consumption")
+                        .where("CSId", CSId)
+                        .find();
+                data.put("net_income", MapUtil.getBigDecimal(daySummaryData, "net_income"));
+                data.put("socket_consumption", MapUtil.getBigDecimal(daySummaryData, "socket_consumption"));
+                //endregion
+
+                //region 端口累计收益金额(元/插座) | 端口累计消费金额(元/插座)
+                Map<String, Object> totalNetIncomeData = ChargeStationDaySummaryV2Entity.getInstance()
+                        .field("IFNULL(SUM(net_income),0) AS total_net_income,IFNULL(SUM(socket_consumption),0) AS total_socket_consumption")
+                        .where("CSId", CSId)
+                        .find();
+                data.put("total_net_income", MapUtil.getBigDecimal(totalNetIncomeData, "total_net_income"));
+                data.put("total_socket_consumption", MapUtil.getBigDecimal(totalNetIncomeData, "total_socket_consumption"));
+                //endregion
+            }
+
+            //region idle用户数：充值或者购买了充电卡但是没有进行过任何充电的用户
+
+            // 查询有充值的用户
+            List<Object> r_user_ids = ConsumeOrdersEntity.getInstance()
+                    .field("uid")
+                    .where("CSId", CSId)
+                    .where("product_type", "recharge")
+                    .where("payment_status", 2) // 支付状态;1=未支付 2=已完成 -1=已取消
+                    .group("uid")
+                    .selectForArray("uid");
+
+            // 查询购买了充电卡的用户
+//            List<Object> c_user_ids = UserChargeCardOrderEntity.getInstance()
+//                    .field("uid")
+//                    .where("CSId", CSId)
+//                    .where("status", 1)
+//                    .group("uid")
+//                    .selectForArray("uid");
+            List<Object> c_user_ids = ConsumeOrdersEntity.getInstance()
+                    .field("uid")
+                    .where("CSId", CSId)
+                    .where("product_type", "charge_card")
+                    .where("payment_status", 2) // 支付状态;1=未支付 2=已完成 -1=已取消
+                    .group("uid")
+                    .selectForArray("uid");
+
+            // 合并 r_user_ids 和 c_user_ids
+            Set<Object> combinedUserIds = new HashSet<>();
+            combinedUserIds.addAll(r_user_ids);
+            combinedUserIds.addAll(c_user_ids);
+
+            //有充值或购买充电卡的用户数
+            int payment_user_count = combinedUserIds.size();
+            data.put("payment_user_count", payment_user_count);
+
+            // 查询有充电的用户
+            List<Object> chargedUserIds = ChargeOrderEntity.getInstance()
+                    .field("uid")
+                    .where("CSId", CSId)
+                    .group("uid")
+                    .selectForArray("uid");
+
+            // 过滤出没有充电的用户
+            chargedUserIds.forEach(combinedUserIds::remove);
+            // 输出或处理没有充电的用户
+            int idle_user_count = combinedUserIds.size();
+
+            data.put("idle_user_count", idle_user_count);
+            //endregion
+
+            //region 最小功率、最大功率、平均功率
+            Map<String, Object> powerComplexData = ChargeOrderEntity.getInstance()
+                    .field("IFNULL(MAX(maxPower),0) as maxPower ,IFNULL(MIN(maxPower),0) as minPower,IFNULL(AVG(maxPower),0) as avgPower")
+                    .where("CSId", CSId)
+                    .where("status", 2)
+                    .where("isTest", 0)
+                    .find();
+            //最小功率
+            data.put("min_power", powerComplexData.get("minPower"));
+            //最大功率
+            data.put("max_power", powerComplexData.get("maxPower"));
+            //平均功率
+            data.put("avg_power", powerComplexData.get("avgPower"));
+            //endregion
+
+            data.put("update_time", TimeUtil.getTimestamp());
+            ChargeStationSummaryV2Entity chargeStationSummaryV2Entity = new ChargeStationSummaryV2Entity();
+            chargeStationSummaryV2Entity.beginTransaction(connection -> {
+                if (chargeStationSummaryV2Entity.where("CSId", CSId).existTransaction(connection)) {
+                    chargeStationSummaryV2Entity.where("CSId", CSId).updateTransaction(connection, data);
+                } else {
+                    data.put("create_time", TimeUtil.getTimestamp());
+                    chargeStationSummaryV2Entity.insertTransaction(connection, data);
+                }
+                return new SyncResult(0, "");
+            });
+
+//            if (ChargeStationSummaryV2Entity.getInstance()
+//                    .where("CSId", CSId).exist()) {
+//                ChargeStationSummaryV2Entity.getInstance().where("CSId", CSId).update(data);
+//            } else {
+//                data.put("create_time", TimeUtil.getTimestamp());
+//                ChargeStationSummaryV2Entity.getInstance().insert(data);
+//            }
+        } catch (Exception e) {
+            LogsUtil.error(e, TAG, "汇总数据发生错误");
+        }
+
+        LogsUtil.info(TAG, "[%s-%s] 统计数据 完成！", CSId, StringUtil.removeLineBreaksAndSpaces(chargeStationEntity.name));
+        return new SyncResult(0, "");
+    }
+
+    /**
+     * 以RocketMQ形式批量启动任务
+     */
+    public void startSyncTask(boolean use_mq) {
+        int page = 1;
+        int limit = 100;
+        while (true) {
+            List<Map<String, Object>> list = ChargeStationEntity.getInstance()
+                    .field("CSId,name,status")
+                    .where("organize_code", SysGlobalConfigEntity.getString("System:Organize:Code"))
+                    .where("isTest", 0)
+                    .page(page, limit)
+                    .select();
+            if (list == null || list.isEmpty()) break;
+
+            page++;
+            // 遍历所有充电站，为每个充电站添加监控任务
+            for (Map<String, Object> nd : list) {
+                String CSId = MapUtil.getString(nd, "CSId");
+                String name = MapUtil.getString(nd, "name");
+                int status = MapUtil.getInt(nd, "status"); //0=删除，1=运营中，2=建设中
+
+                if (status != 1) continue;
+
+                if (use_mq) {
+                    JSONObject rocketMQData = new JSONObject();
+                    rocketMQData.put("CSId", CSId);
+                    rocketMQData.put("name", name);
+                    XRocketMQ.getGlobal().pushOneway(ChargeStationXRocketMQConsumerV2.TOPIC, "SummaryTaskV2", rocketMQData);
+                } else {
+                    ThreadUtil.getInstance().execute(String.format("[%s-%s] %s", CSId, name, TAG), () -> syncTaskJob(CSId));
+                }
+            }
+        }
+    }
+}

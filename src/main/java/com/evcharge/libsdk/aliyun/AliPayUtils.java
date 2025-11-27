@@ -1,0 +1,77 @@
+package com.evcharge.libsdk.aliyun;
+
+import com.xyzs.utils.LogsUtil;
+
+import javax.crypto.Cipher;
+import javax.crypto.spec.IvParameterSpec;
+import javax.crypto.spec.SecretKeySpec;
+import java.util.Base64;
+
+public class AliPayUtils {
+
+
+    private static final String AES_ALG = "AES";
+
+    /**
+     * AES算法
+     */
+    private static final String AES_CBC_PCK_ALG = "AES/CBC/PKCS5Padding";
+
+    private static final byte[] AES_IV = initIv(AES_CBC_PCK_ALG);
+
+
+    /**
+     * AES解密
+     *
+     * @param content
+     * @param key
+     * @param charset
+     * @return
+     * @throws
+     */
+    public String aesDecrypt(String content, String key, String charset) {
+        try {
+            Cipher cipher = Cipher.getInstance(AES_CBC_PCK_ALG);
+            IvParameterSpec iv = new IvParameterSpec(initIv(AES_CBC_PCK_ALG));
+            cipher.init(Cipher.DECRYPT_MODE, new SecretKeySpec(Base64.getDecoder().decode(key.getBytes()),
+                    AES_ALG), iv);
+
+            byte[] cleanBytes = cipher.doFinal(Base64.getDecoder().decode(content.getBytes()));
+            return new String(cleanBytes, charset);
+        } catch (Exception e) {
+//            throw new ErrorCodeException("AES解密失败：Aescontent = " + content + "; charset = "
+//                    + charset, ErrorCode.SYSTEM_ERROR, e);
+            LogsUtil.error(this.getClass().getName(), "AES解密失败：Aescontent = " + content + "; charset = " + charset, e);
+            return null;
+        }
+    }
+
+
+    /**
+     * 初始向量的方法, 全部为0. 这里的写法适合于其它算法,针对AES算法的话,IV值一定是128位的(16字节).
+     *
+     * @param fullAlg
+     * @return
+     * @throws
+     */
+    private static byte[] initIv(String fullAlg) {
+
+        try {
+            Cipher cipher = Cipher.getInstance(fullAlg);
+            int blockSize = cipher.getBlockSize();
+            byte[] iv = new byte[blockSize];
+            for (int i = 0; i < blockSize; ++i) {
+                iv[i] = 0;
+            }
+            return iv;
+        } catch (Exception e) {
+
+            int blockSize = 16;
+            byte[] iv = new byte[blockSize];
+            for (int i = 0; i < blockSize; ++i) {
+                iv[i] = 0;
+            }
+            return iv;
+        }
+    }
+}
