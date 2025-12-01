@@ -6,6 +6,7 @@ import com.evcharge.service.Summary.Dashboard.v2.DashboardUserV2Service;
 import com.xyzs.cache.ECacheTime;
 import com.xyzs.database.ISqlDBObject;
 import com.xyzs.entity.DataService;
+import com.xyzs.utils.MapUtil;
 import com.xyzs.utils.TimeUtil;
 import com.xyzs.utils.common;
 import org.springframework.stereotype.Service;
@@ -59,6 +60,16 @@ public class DashboardUserV2ServiceImpl implements DashboardUserV2Service {
         List<Map<String, Object>> list = db.select();
 
         if (list.isEmpty()) return common.apicb(1, "No data available.");
+        int totalRegisteredUsers=0;
+        for (int i = 0; i < list.size(); i++) {
+            Map<String, Object> map = list.get(i);
+            if(i==0){
+                totalRegisteredUsers= MapUtil.getInt(map,"total_registered_users");
+                continue;
+            }
+            totalRegisteredUsers=totalRegisteredUsers+MapUtil.getInt(map,"total_registered_users");
+            map.put("total_registered_users",totalRegisteredUsers);
+        }
         DataService.getMainCache().setList(cacheKey, list, ECacheTime.DAY);
         return common.apicb(0, "success", list);
     }

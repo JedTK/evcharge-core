@@ -1,13 +1,18 @@
 package com.evcharge.service.Summary.Dashboard.v2.impl;
 
 import com.alibaba.fastjson2.JSONObject;
+import com.evcharge.dto.summary.RegionPageRequest;
 import com.evcharge.dto.summary.RegionRequest;
+import com.evcharge.entity.inspect.InspectContactInfo;
+import com.evcharge.entity.station.ChargeStationEntity;
 import com.evcharge.service.Summary.Dashboard.v2.DashboardStationV2Service;
 import com.evcharge.service.Summary.Dashboard.v2.builder.RegionQueryBuilder;
+import com.evcharge.service.Summary.Dashboard.v2.helper.InspectQueryHelper;
 import com.evcharge.service.Summary.Dashboard.v2.helper.SummaryQueryHelper;
 import com.xyzs.cache.ECacheTime;
 import com.xyzs.database.ISqlDBObject;
 import com.xyzs.entity.DataService;
+import com.xyzs.utils.MapUtil;
 import com.xyzs.utils.TimeUtil;
 import com.xyzs.utils.common;
 import org.springframework.stereotype.Service;
@@ -20,6 +25,106 @@ import java.util.Map;
 
 @Service
 public class DashboardStationV2ServiceImpl implements DashboardStationV2Service {
+
+
+    public JSONObject getGeneralDeviceForPage(RegionPageRequest request, String keyword,String type) {
+        String cacheKey = String.format("Dashboard:V2:SprayList:%s%s%s%s:%s:%s,%s",
+                request.getProvinceCode()
+                , request.getCityCode()
+                , request.getDistrictCode()
+                , request.getStreetCode()
+                ,type
+                , request.getPage()
+                , request.getLimit()
+        );
+        String cacheTotalKey = String.format("Dashboard:V2:SprayList:Total:%s%s%s%s:%s:%s,%s",
+                request.getProvinceCode()
+                , request.getCityCode()
+                , request.getDistrictCode()
+                , request.getStreetCode()
+                ,type
+                , request.getPage()
+                , request.getLimit()
+        );
+        List<Map<String, Object>> cache = DataService.getMainCache().getList(cacheKey);
+        int total = DataService.getMainCache().getInt(cacheTotalKey);
+        if (!cache.isEmpty()) {
+            return common.apicbWithPageV2(total, request.getPage(), request.getLimit(), cache);
+
+        }
+
+        ISqlDBObject db = DataService.getDB().name("GeneralDeviceView");
+        db.where("CSId", "<>", 10);
+        db = new RegionQueryBuilder(request).applyTo(db);
+
+        db.page(request.getPage(), request.getLimit());
+
+        List<Map<String, Object>> list = db
+                .where("typeCode", type)
+                .select();
+
+        if (list.isEmpty()) return common.apicb(1, "数据不存在");
+
+        ISqlDBObject dbPageObject = DataService.getDB().name("GeneralDeviceView");
+
+        dbPageObject = new RegionQueryBuilder(request).applyTo(dbPageObject);
+        dbPageObject.where("typeCode", type);
+        dbPageObject.where("CSId", "<>", 10);
+        total = dbPageObject.count();
+
+        for (Map<String, Object> map : list) {
+
+            String csID = MapUtil.getString(map, "CSId");
+            map.remove("spec");
+            map.remove("brandCode");
+            map.remove("spuCode");
+            map.remove("mainSerialNumber");
+            Map<String, Object> inspectStation = DataService.getDB("inspect").name("ChargeStation")
+                    .where("CSId", csID)
+                    .find();
+
+            if (inspectStation != null) {
+                map.put("station_name",MapUtil.getString(inspectStation,"name"));
+                map.put("province",MapUtil.getString(inspectStation,"province"));
+                map.put("city",MapUtil.getString(inspectStation,"city"));
+                map.put("district",MapUtil.getString(inspectStation,"district"));
+                map.put("street",MapUtil.getString(inspectStation,"street"));
+                map.put("communities",MapUtil.getString(inspectStation,"communities"));
+                map.put("roads",MapUtil.getString(inspectStation,"roads"));
+                map.put("address",MapUtil.getString(inspectStation,"address"));
+                String uuid = MapUtil.getString(inspectStation, "uuid");
+                //获取紧急联系人
+                InspectContactInfo inspectContactInfo = InspectQueryHelper.getInspectEmergencyContact(uuid);
+
+                if (inspectContactInfo != null) {
+                    map.put("contact_person", inspectContactInfo.getName());
+                    map.put("contact_phone", inspectContactInfo.getPhone());
+                    map.put("last_inspect_time", inspectContactInfo.getInspectTime());
+                } else {
+                    map.put("contact_person", "-");
+                    map.put("contact_phone", "-");
+                    map.put("last_inspect_time", "");
+                }
+            } else {
+                map.put("contact_person", "-");
+                map.put("contact_phone", "-");
+                map.put("last_inspect_time", "");
+            }
+
+            ChargeStationEntity chargeStation = ChargeStationEntity.getInstance().getWithCSId(csID);
+            int useSocket = chargeStation.totalSocket - chargeStation.totalIdleSocket;
+            BigDecimal usingRate = safeDivide(useSocket, chargeStation.totalSocket);
+
+            map.put("use_socket", useSocket);
+            map.put("use_socket_rate", usingRate);
+        }
+
+
+        DataService.getMainCache().setList(cacheKey, list, ECacheTime.DAY);
+        DataService.getMainCache().set(cacheTotalKey, total, ECacheTime.DAY);
+        return common.apicbWithPageV2(total, request.getPage(), request.getLimit(), list);
+    }
+
 
     /**
      * 获取站点统计数据
@@ -344,5 +449,10 @@ public class DashboardStationV2ServiceImpl implements DashboardStationV2Service 
         return common.apicb(0, "success", list);
     }
 
-
+    private BigDecimal safeDivide(int numerator, int denominator) {
+        if (denominator == 0) return BigDecimal.ZERO;
+        return new BigDecimal(numerator)
+                .divide(new BigDecimal(denominator), 4, RoundingMode.HALF_UP)
+                .setScale(2, RoundingMode.HALF_UP);
+    }
 }

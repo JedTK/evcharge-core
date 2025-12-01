@@ -57,6 +57,7 @@ public class DashboardMonitorV2ServiceImpl implements DashboardMonitorV2Service 
         db.page(request.getPage(), request.getLimit());
 
         List<Map<String, Object>> list = db
+                .where("online_status",1)
                 .where("typeCode", "4GNVR")
                 .where("brandCode", type)
                 .select();
@@ -66,6 +67,7 @@ public class DashboardMonitorV2ServiceImpl implements DashboardMonitorV2Service 
         ISqlDBObject dbPageObject = DataService.getDB().name("GeneralDeviceView");
 
         dbPageObject = new RegionQueryBuilder(request).applyTo(dbPageObject);
+        dbPageObject.where("online_status", 1);
         dbPageObject.where("CSId", "<>", 10);
         dbPageObject.where("brandCode", type);
         total = dbPageObject.count();

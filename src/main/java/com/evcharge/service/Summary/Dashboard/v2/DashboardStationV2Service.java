@@ -1,11 +1,18 @@
 package com.evcharge.service.Summary.Dashboard.v2;
 
 import com.alibaba.fastjson2.JSONObject;
+import com.evcharge.dto.summary.RegionPageRequest;
 import com.evcharge.dto.summary.RegionRequest;
 import org.springframework.stereotype.Component;
 
 @Component
 public interface DashboardStationV2Service {
+
+
+    //喷淋
+    JSONObject getGeneralDeviceForPage(RegionPageRequest request, String keyword,String type);
+
+
 
     /**
      * 获取站点统计数据

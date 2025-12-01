@@ -7,7 +7,7 @@
 **/web/h5/node_modules
 **/web/h5/dist
 
-target/
+target/**
 !.mvn/wrapper/maven-wrapper.jar
 !**/src/main/**/target/
 !**/src/test/**/target/
@@ -52,25 +52,5 @@ build/
 ### Mac OS ###
 .DS_Store
 .idea/misc.xml
-.idea/vcs.xml
-.idea/vcs.xml
-ChargeApi/ChargeApi-1.jar
-*.jar
-.idea/vcs.xml
-.idea/vcs.xml
-.idea/vcs.xml
-.idea/misc.xml
-.idea/encodings.xml
-.idea/vcs.xml
-.idea/vcs.xml
-.idea/vcs.xml
-.idea/encodings.xml
-.idea/vcs.xml
-.idea/encodings.xml
-.idea/misc.xml
-.idea/vcs.xml
-.idea/vcs.xml
-.com.evcharge.center_AppLicense
-log/abcbank/TrxLog.20250323.log
 .idea/vcs.xml
 .idea/vcs.xml

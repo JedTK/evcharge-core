@@ -5,7 +5,7 @@
     <modelVersion>4.0.0</modelVersion>
 
     <groupId>com.evcharge</groupId>
-    <artifactId>evcharge-core</artifactId>
+    <artifactId>EvCore</artifactId>
     <packaging>jar</packaging>
     <version>2.0</version>
 
