@@ -91,8 +91,7 @@ public class UserService {
 //        return this.findUserByUid(userId);
 //
 //    }
-
-    public SyncResult authorizeAndUpdatePhone(long userId, String code,int regId) {
+    public SyncResult authorizeAndUpdatePhone(long userId, String code, int regId) {
         WechatSDK wechatSDK = new WechatSDK();
         SyncResult result = wechatSDK.getPhoneInfo(code);
         if (result.getCode() != 0) {
@@ -106,23 +105,23 @@ public class UserService {
 
         UserSourceInfoEntity sourceInfo = UserSourceInfoEntity.getInstance().getInfo(userId, EUserRegType.wechatId);
         if (sourceInfo != null && StringUtils.hasLength(sourceInfo.phone)) {
-            return new SyncResult(0,"success",userId);
+            return new SyncResult(0, "success", userId);
         }
 
         UserEntity existingUserWithPhone = UserEntity.getInstance().getUserByPhone(phoneNumber);
 
-        if(existingUserWithPhone != null){
+        if (existingUserWithPhone != null) {
 
-            if(existingUserWithPhone.reg_id ==1){
-                return new SyncResult(1,"手机号码已被注册！");
+            if (existingUserWithPhone.reg_id == 1) {
+                return new SyncResult(1, "手机号码已被注册！");
             }
-            if (UserSourceInfoEntity.getInstance().where("uid","<>",userId).where("phone", phoneNumber)
+            if (UserSourceInfoEntity.getInstance().where("uid", "<>", userId).where("phone", phoneNumber)
                     .where("reg_id", 1).count() > 0) {
                 return new SyncResult(1, "手机号码已被注册！");
             }
-            if(existingUserWithPhone.reg_id ==2){
+            if (existingUserWithPhone.reg_id == 2) {
                 mergeUserAccounts(userId, existingUserWithPhone, phoneNumber);
-                return new SyncResult(0,"success",existingUserWithPhone.id);
+                return new SyncResult(0, "success", existingUserWithPhone.id);
             }
 
         }
@@ -130,7 +129,7 @@ public class UserService {
         updateUserAndSourceInfoWithPhone(userId, phoneNumber);
         // 5. 检查第三方派券
         ThirtyPartyCouponService.getInstance().checkCoupon(phoneNumber);
-        return new SyncResult(0,"success",userId);
+        return new SyncResult(0, "success", userId);
     }
 
 
@@ -148,23 +147,23 @@ public class UserService {
 
         UserSourceInfoEntity sourceInfo = UserSourceInfoEntity.getInstance().getInfo(userId, EUserRegType.alipayId);
         if (sourceInfo != null && StringUtils.hasLength(sourceInfo.phone)) {
-            return new SyncResult(0,"success",userId);
+            return new SyncResult(0, "success", userId);
         }
 
         UserEntity existingUserWithPhone = UserEntity.getInstance().getUserByPhone(phoneNumber);
 
-        if(existingUserWithPhone != null){
+        if (existingUserWithPhone != null) {
 
-            if(existingUserWithPhone.reg_id == EUserRegType.alipayId){
-                return new SyncResult(1,"手机号码已被注册！");
+            if (existingUserWithPhone.reg_id == EUserRegType.alipayId) {
+                return new SyncResult(1, "手机号码已被注册！");
             }
-            if (UserSourceInfoEntity.getInstance().where("uid","<>",userId).where("phone", phoneNumber)
+            if (UserSourceInfoEntity.getInstance().where("uid", "<>", userId).where("phone", phoneNumber)
                     .where("reg_id", 2).count() > 0) {
                 return new SyncResult(1, "手机号码已被注册！");
             }
-            if(existingUserWithPhone.reg_id ==1){
+            if (existingUserWithPhone.reg_id == 1) {
                 mergeUserAccounts(userId, existingUserWithPhone, phoneNumber);
-                return new SyncResult(0,"success",existingUserWithPhone.id);
+                return new SyncResult(0, "success", existingUserWithPhone.id);
             }
 
         }
@@ -172,7 +171,7 @@ public class UserService {
         updateUserAndSourceInfoWithPhone(userId, phoneNumber);
         // 5. 检查第三方派券
         ThirtyPartyCouponService.getInstance().checkCoupon(phoneNumber);
-        return new SyncResult(0,"success",userId);
+        return new SyncResult(0, "success", userId);
     }
 
     /**
@@ -237,6 +236,37 @@ public class UserService {
 //        }
     }
 
+    public UserEntity findUserByUnionId(String unionId) {
+        // 1. 优先根据 openId 和注册类型查找用户
+//        return this.findUserByOpenID(openId, EUserRegType.wechatId);
+
+        // 2. 如果 openId 未找到，则尝试根据 unionId 查找
+        if (StringUtils.hasLength(unionId)) {
+            UserSourceInfoEntity sourceInfoByUnionId = UserSourceInfoEntity.getInstance().getInfoByUnionId(unionId);
+            if (sourceInfoByUnionId != null) {
+                return this.findUserByUid(sourceInfoByUnionId.uid);
+            } else {
+                return null;
+            }
+        } else {
+            return null;
+        }
+    }
+
+
+    public UserSourceInfoEntity findUserSourceInfoByUnionId(String unionId) {
+        // 1. 优先根据 openId 和注册类型查找用户
+//        return this.findUserByOpenID(openId, EUserRegType.wechatId);
+
+        // 2. 如果 openId 未找到，则尝试根据 unionId 查找
+        if (StringUtils.hasLength(unionId)) {
+            return UserSourceInfoEntity.getInstance().getInfoByUnionId(unionId);
+        } else {
+            return null;
+        }
+    }
+
+
     /**
      * 根据openid 获取用户信息
      *
@@ -279,6 +309,17 @@ public class UserService {
 //                .join("UserSourceInfo i", "u.id=i.uid")
                 .where("u.id", uid)
                 .findEntity();
+    }
+
+
+    public void updateUnionId(long userId, String unionId) {
+        UserSourceInfoEntity userSourceInfoEntity = UserSourceInfoEntity.getInstance().where("uid", userId)
+                .findEntity();
+        if (!StringUtils.hasLength(userSourceInfoEntity.union_id) && StringUtils.hasLength(unionId)) {
+            UserSourceInfoEntity.getInstance().where("id", userSourceInfoEntity.id).update(new LinkedHashMap<>() {{
+                put("union_id", unionId);
+            }});
+        }
     }
 
     /**
