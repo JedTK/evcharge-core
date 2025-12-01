@@ -24,7 +24,6 @@ public class OfficeAccountSDK {
 //        Security.addProvider(new BouncyCastleProvider());
     }
 
-
     /**
      * 初始化access_token
      */
@@ -38,7 +37,7 @@ public class OfficeAccountSDK {
         try {
 //            String text = Http2Util.get(url);
 //            String text = httpClientForWechat.sendGet(url);
-            String text =httpClientForWechat.sendGet(url);
+            String text = httpClientForWechat.sendGet(url);
 //            System.out.println("httpClientForWechat="+text);
 //            String text=HttpUtil.sendGet(url);
             if ("".equals(text)) {
@@ -64,8 +63,6 @@ public class OfficeAccountSDK {
 
     /**
      * 获取 jsapi_ticket：(请求次数有限制，建议全局存储与更新)
-     *
-     * @return
      */
     public String getJsApiTicket() {
         String ticket = DataService.getMainCache().getString("WxOfficeJsApiTicket");
@@ -76,10 +73,9 @@ public class OfficeAccountSDK {
 
             try {
                 String text = HttpUtil.sendGet(url);
-                if ("".equals(text)) {
-                    return "";
-                }
-                JSONObject json = (JSONObject) JSONObject.parse(text);
+                if (StringUtil.isEmpty(text)) return "";
+
+                JSONObject json = JSONObject.parse(text);
 
                 if (json.getInteger("errcode") != 0) {
                     return "";
@@ -97,45 +93,18 @@ public class OfficeAccountSDK {
 
     /**
      * 获取jsapi签名
-     *
-     * @return
      */
     public JSONObject createSignPackage() {
-        String jsApiTicket = this.getJsApiTicket();
-        String nonceStr = this.createNonceStr();
-        String url = HttpRequestUtil.getUrl();
-
-        long timestamp = TimeUtil.getTimestamp() / 1000;
-
-        try {
-
-            String rawString = String.format("jsapi_ticket=%s&noncestr=%s&timestamp=%s&url=%s", jsApiTicket, nonceStr, timestamp, url);
-            JSONObject signPackage = new JSONObject();
-            String signature = SHAUtils.sha1(rawString);
-            signPackage.put("jsapiTicket", jsApiTicket);
-            signPackage.put("appId", appId);
-            signPackage.put("nonceStr", nonceStr);
-            signPackage.put("timestamp", timestamp);
-            signPackage.put("url", url);
-            signPackage.put("signature", signature);
-            signPackage.put("rawString", rawString);
-            return signPackage;
-
-        } catch (Exception e) {
-            LogsUtil.error(e, "", "签名失败");
-            return new JSONObject();
-        }
-
+        return createSignPackage(HttpRequestUtil.getUrl());
     }
 
     public JSONObject createSignPackage(String url) {
         String jsApiTicket = this.getJsApiTicket();
         String nonceStr = this.createNonceStr();
+//        String url = HttpRequestUtil.getUrl();
 
         long timestamp = TimeUtil.getTimestamp() / 1000;
-
         try {
-
             String rawString = String.format("jsapi_ticket=%s&noncestr=%s&timestamp=%s&url=%s", jsApiTicket, nonceStr, timestamp, url);
             JSONObject signPackage = new JSONObject();
             String signature = SHAUtils.sha1(rawString);
@@ -147,19 +116,15 @@ public class OfficeAccountSDK {
             signPackage.put("signature", signature);
             signPackage.put("rawString", rawString);
             return signPackage;
-
         } catch (Exception e) {
             LogsUtil.error(e, "", "签名失败");
             return new JSONObject();
         }
-
     }
 
 
     /**
      * 获取随机数
-     *
-     * @return
      */
     private String createNonceStr() {
         int length = 10;
@@ -173,6 +138,4 @@ public class OfficeAccountSDK {
         }
         return str;
     }
-
-
 }
