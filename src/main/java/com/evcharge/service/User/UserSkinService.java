@@ -228,5 +228,28 @@ public class UserSkinService {
 
     }
 
+    /**
+     * 移除皮肤
+     * @param uid uid
+     * @param skinId skinId
+     * @return SyncResult
+     */
+    public SyncResult removeSkin(long uid, long skinId) {
+        UserSkinEntity userSkinEntity = UserSkinEntity.getInstance()
+                .where("uid",uid)
+                .where("skin_id",skinId)
+                .where("status",1)
+                .findEntity();
+
+        if(userSkinEntity == null) return new SyncResult(1,"没有皮肤信息");
+        Map<String, Object> map = new LinkedHashMap<>();
+        map.put("status",0);
+        map.put("update_time", TimeUtil.getTimestamp());
+        long id=UserSkinEntity.getInstance().where("id",userSkinEntity.id).update(map);
+        if(id==0) return new SyncResult(1,"移除失败");
+        return new SyncResult(0, "success");
+    }
+
+
 
 }
