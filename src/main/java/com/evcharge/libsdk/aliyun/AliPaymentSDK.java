@@ -42,7 +42,7 @@ public class AliPaymentSDK {
             // 构造请求参数以调用接口
             AlipayTradeCreateRequest request = new AlipayTradeCreateRequest();
             //设置回传地址
-            String notifyUrl = String.format("%s%s", ConfigManager.getString("alipay.notify_url"), callBackUrl);
+            String notifyUrl = String.format("%s%s", ConfigManager.getString("consume.notify_url"), callBackUrl);
             System.out.println("notifyUrl=" + notifyUrl);
             request.setNotifyUrl(notifyUrl);
             AlipayTradeCreateModel model = new AlipayTradeCreateModel();
