@@ -34,6 +34,8 @@ public class UserService {
     }
 
     public static void setUserEntityCache(String token, UserEntity userEntity) {
+        DataService.getMainCache().del(String.format("User:Info:%s", userEntity.id));
+
         DataService.getMainCache().setObj(String.format("User:Info:%s", userEntity.id), userEntity, 86400 * 1000 * 7);
         DataService.getMainCache().set(String.format("User:Token:%s", token), userEntity.id, 86400 * 1000 * 7);
     }
@@ -111,7 +113,9 @@ public class UserService {
         UserEntity existingUserWithPhone = UserEntity.getInstance().getUserByPhone(phoneNumber);
 
         if (existingUserWithPhone != null) {
-
+            if (existingUserWithPhone.id == userId) {
+                return new SyncResult(0, "success", userId);
+            }
             if (existingUserWithPhone.reg_id == 1) {
                 return new SyncResult(1, "手机号码已被注册！");
             }
@@ -253,7 +257,11 @@ public class UserService {
         }
     }
 
-
+    /**
+     *
+     * @param unionId
+     * @return
+     */
     public UserSourceInfoEntity findUserSourceInfoByUnionId(String unionId) {
         // 1. 优先根据 openId 和注册类型查找用户
 //        return this.findUserByOpenID(openId, EUserRegType.wechatId);
@@ -304,10 +312,10 @@ public class UserService {
      * @return
      */
     public UserEntity findUserByUid(Long uid) {
-        return UserEntity.getInstance().alias("u")
+        return UserEntity.getInstance()
 //                .field("u.id,i.open_id,u.nickname,u.avatar,u.status,u.phone,u.sharecode")
 //                .join("UserSourceInfo i", "u.id=i.uid")
-                .where("u.id", uid)
+                .where("id", uid)
                 .findEntity();
     }
 
