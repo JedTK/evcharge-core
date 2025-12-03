@@ -132,6 +132,14 @@ public class ChargeStationEntity extends BaseEntity implements Serializable {
      */
     public String mainImage;
     /**
+     * 收费标准配置
+     */
+    public long chargeStandardConfigId;
+    /**
+     * 充电时长配置
+     */
+    public long chargeTimeConfigId;
+    /**
      * 正式上线时间
      */
     public long online_time;

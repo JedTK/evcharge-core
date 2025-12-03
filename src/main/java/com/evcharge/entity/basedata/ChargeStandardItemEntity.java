@@ -82,8 +82,6 @@ public class ChargeStandardItemEntity extends BaseEntity implements Serializable
 
     /**
      * 获得一个实例
-     *
-     * @return
      */
     public static ChargeStandardItemEntity getInstance() {
         return new ChargeStandardItemEntity();
@@ -91,10 +89,6 @@ public class ChargeStandardItemEntity extends BaseEntity implements Serializable
 
     /**
      * 根据配置ID和充电功率查询适配的项
-     *
-     * @param configId
-     * @param chargePower
-     * @return
      */
     public ChargeStandardItemEntity getItemWithConfig(long configId, double chargePower) {
         ChargeStandardItemEntity chargeStandardItemEntity = this
@@ -114,9 +108,6 @@ public class ChargeStandardItemEntity extends BaseEntity implements Serializable
 
     /**
      * 根据配置ID和充电功率查询适配的项
-     *
-     * @param id item id
-     * @return
      */
     public ChargeStandardItemEntity getItemWithId(long id) {
         return this.cache(String.format("BaseData:ChargeStandardItem:%s", id))
@@ -130,7 +121,6 @@ public class ChargeStandardItemEntity extends BaseEntity implements Serializable
      * @param uid           用户ID
      * @param user_ebike_id 用户车辆
      * @param deviceEntity  设备信息
-     * @return
      */
     public ChargeStandardItemEntity getItemWithUserBike(long uid, long user_ebike_id, DeviceEntity deviceEntity) {
         return getItemWithUserBike(uid, user_ebike_id, deviceEntity, 0);
@@ -143,7 +133,6 @@ public class ChargeStandardItemEntity extends BaseEntity implements Serializable
      * @param user_ebike_id 用户车辆
      * @param deviceEntity  设备信息
      * @param port          端口
-     * @return
      */
     public ChargeStandardItemEntity getItemWithUserBike(long uid, long user_ebike_id, DeviceEntity deviceEntity, int port) {
         //根据用户的车辆信息查询限制的充电功率

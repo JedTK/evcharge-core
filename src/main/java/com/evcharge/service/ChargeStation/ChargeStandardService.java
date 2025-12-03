@@ -1,7 +1,6 @@
 package com.evcharge.service.ChargeStation;
 
 import com.evcharge.entity.basedata.ChargeStandardItemEntity;
-import com.evcharge.entity.basedata.ChargeTimeItemEntity;
 import com.evcharge.entity.device.DeviceEntity;
 import com.evcharge.entity.station.ChargeStationEntity;
 import com.xyzs.entity.ISyncResult;
@@ -11,15 +10,16 @@ import lombok.NonNull;
 import java.util.List;
 import java.util.Map;
 
+
 /**
- * 充电时间 - 业务逻辑类
+ * 充电收费标准 - 业务逻辑
  */
-public class ChargeTimeService {
+public class ChargeStandardService {
     /**
      * 获得一个实例
      */
-    public static ChargeTimeService getInstance() {
-        return new ChargeTimeService();
+    public static ChargeStandardService getInstance() {
+        return new ChargeStandardService();
     }
 
     /**
@@ -40,17 +40,17 @@ public class ChargeTimeService {
         if (page <= 0) page = 1;
         if (limit <= 0) limit = 50;
 
-        long chargeTimeConfigId = chargeStationEntity.chargeTimeConfigId;
-        if (chargeTimeConfigId == 0) {
-            chargeTimeConfigId = deviceEntity.chargeTimeConfigId;
+        long chargeStandardConfigId = chargeStationEntity.chargeStandardConfigId;
+        if (chargeStandardConfigId == 0) {
+            chargeStandardConfigId = deviceEntity.chargeStandardConfigId;
         }
 
-        List<Map<String, Object>> list = ChargeTimeItemEntity.getInstance()
-                .field("id,name,chargeTime,chargeAutoStop")
-                .cache(String.format("ChargeTime:%s:%s_%s", chargeTimeConfigId, page, limit))
-                .where("configId", chargeTimeConfigId)
+        List<Map<String, Object>> list = ChargeStandardItemEntity.getInstance()
+                .field("id,minPower,maxPower,electricityFeePrice,serviceFeePrice,price,chargeCardConsumeTimeRate,integralConsumeRate")
+                .cache(String.format("ChargeStandardItem:%s:%s_%s", chargeStandardConfigId, page, limit))
+                .where("configId", chargeStandardConfigId)
                 .page(page, limit)
-                .order("chargeTime")
+                .order("minPower")
                 .select();
         return new SyncResult(0, "", list);
     }
