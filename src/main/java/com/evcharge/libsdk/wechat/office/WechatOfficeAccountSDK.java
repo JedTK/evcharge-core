@@ -198,10 +198,7 @@ public class WechatOfficeAccountSDK {
             }
 
             // 3. 构造微信官方接口地址
-            String url = String.format(
-                    "https://api.weixin.qq.com/cgi-bin/ticket/getticket?type=jsapi&access_token=%s",
-                    accessToken
-            );
+            String url = String.format("https://api.weixin.qq.com/cgi-bin/ticket/getticket?type=jsapi&access_token=%s", accessToken);
 
             // 4. 发起 HTTP GET 请求
             HttpClientForWechat client = new HttpClientForWechat(new RestTemplate());
@@ -262,7 +259,7 @@ public class WechatOfficeAccountSDK {
      * @return JsApi 签名相关参数的 JSON 对象，失败时返回 null。
      */
     public JSONObject generateJsSignature() {
-        return generateJsSignature(HttpRequestUtil.getUrl());
+        return generateJsSignature(HttpRequestUtil.getClientUrl());
     }
 
     /**
@@ -302,23 +299,24 @@ public class WechatOfficeAccountSDK {
 
             // 3. 按照微信官方要求拼接待签名字符串
             // 注意：参数名全部小写，且必须按指定顺序连接。
-            String rawString = String.format(
-                    "jsapi_ticket=%s&noncestr=%s&timestamp=%s&url=%s",
-                    jsApiTicket,
-                    nonceStr,
-                    timestamp,
-                    url
+            String rawString = String.format("jsapi_ticket=%s&noncestr=%s&timestamp=%s&url=%s"
+                    , jsApiTicket
+                    , nonceStr
+                    , timestamp
+                    , url
             );
 
             // 4. 使用 SHA1 对字符串进行签名
             String signature = SHAUtils.sha1(rawString);
+
+//            LogsUtil.info(TAG, "请求JsApi签名处理 - 签名字符串：%s 签名后：%s", rawString, signature);
 
             // 5. 组装返回给前端的签名包
             JSONObject signPackage = new JSONObject();
             // 当前使用的 jsapi_ticket，便于排查问题时比对
             signPackage.put("jsapiTicket", jsApiTicket);
             // 微信公众号 appId
-            signPackage.put("appId", appId);
+            signPackage.put("appId", this.appId);
             // 随机串
             signPackage.put("nonceStr", nonceStr);
             // 时间戳（秒级）
@@ -329,6 +327,9 @@ public class WechatOfficeAccountSDK {
             signPackage.put("signature", signature);
             // 签名前的原始拼接字符串，便于调试
             signPackage.put("rawString", rawString);
+
+//            LogsUtil.info(TAG, "请求JsApi签名：%s", signPackage.toJSONString());
+
             return signPackage;
         } catch (Exception e) {
             // 在日志里记录 URL 与错误信息，便于排查线上问题
