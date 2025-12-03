@@ -4,13 +4,18 @@ import com.evcharge.entity.chargecard.ChargeCardConfigEntity;
 import com.evcharge.entity.chargecard.ChargeCardTypeEntity;
 import com.evcharge.entity.chargecard.PhysicalCardMappingDataEntity;
 import com.evcharge.entity.chargecard.UserChargeCardEntity;
+import com.evcharge.entity.gamemate.skin.SkinEntity;
 import com.evcharge.enumdata.ECacheTime;
+import com.evcharge.service.GameMate.SkinService;
+import com.evcharge.service.User.UserSkinService;
 import com.xyzs.entity.ISyncResult;
 import com.xyzs.entity.SyncResult;
 import com.xyzs.utils.LogsUtil;
 import com.xyzs.utils.MapUtil;
 import com.xyzs.utils.StringUtil;
 import com.xyzs.utils.TimeUtil;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -23,7 +28,12 @@ import java.util.Map;
  * 充电卡业务逻辑，大部分旧版本的业务逻辑都在实体类中
  * date：2025-04-14
  */
+@Service
 public class ChargeCardService {
+
+    @Autowired
+    private UserSkinService userSkinService;
+
     private final static String TAG = "充电卡业务逻辑";
 
     public static ChargeCardService getInstance() {
@@ -125,6 +135,8 @@ public class ChargeCardService {
             userChargeCardEntity.create_time = TimeUtil.getTimestamp();
             userChargeCardEntity.id = userChargeCardEntity.insertGetId();
             if (userChargeCardEntity.id == 0) return new SyncResult(1, "操作失败");
+            //添加皮肤
+            SyncResult res = userSkinService.addSkinForCardId(uid, configEntity.id, cardNumber);
 
             return new SyncResult(0, "");
         } catch (Exception e) {
@@ -169,6 +181,7 @@ public class ChargeCardService {
             int noquery = cardEntity.update(cardEntity.id, new LinkedHashMap<>() {{
                 put("status", 0);
             }});
+            SyncResult res = userSkinService.removeSkinForCardId(uid, configEntity.id);
             if (noquery >= 0) return new SyncResult(0, "");
         } catch (Exception e) {
             LogsUtil.error(e, TAG, "用户绑定实体卡发生错误");

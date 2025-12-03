@@ -20,12 +20,13 @@ public class UserSkinService {
 
     /**
      * 检查用户是否拥有某个皮肤
+     *
      * @param userId uid
      * @param skinId skin_id
      * @return
      */
-    public boolean checkUserSkin(long userId,long skinId) {
-        int count= UserSkinEntity.getInstance()
+    public boolean checkUserSkin(long userId, long skinId) {
+        int count = UserSkinEntity.getInstance()
                 .where("uid", userId)
                 .where("skin_id", skinId)
                 .where("status", 1)
@@ -149,7 +150,7 @@ public class UserSkinService {
 
         SkinEntity skinEntity = skinService.getSkinInfoById(skinId);
 
-        if(skinEntity.type_code.equals("system"))  return new SyncResult(0, "success");
+        if (skinEntity.type_code.equals("system")) return new SyncResult(0, "success");
 
         Map<String, Object> data = new HashMap<>();
         data.put("is_default", 1);
@@ -165,6 +166,32 @@ public class UserSkinService {
         return new SyncResult(0, "success");
     }
 
+    /**
+     * 添加皮肤 绑定物理卡用到
+     *
+     * @param uid        用户uid
+     * @param cardId     卡id
+     * @param cardNumber 卡编号
+     * @return SyncResult
+     */
+    public SyncResult addSkinForCardId(long uid, long cardId, String cardNumber) {
+        SkinEntity skinEntity = skinService.getSkinInfoByCardId(cardId);
+        if (skinEntity == null) return new SyncResult(1, "");
+        return addSkin(uid, skinEntity.id, "card", cardNumber);
+    }
+
+    /**
+     * 移除皮肤 解绑的时候需要用到
+     *
+     * @param uid    用户uid
+     * @param cardId 卡id
+     * @return SyncResult
+     */
+    public SyncResult removeSkinForCardId(long uid, long cardId) {
+        SkinEntity skinEntity = skinService.getSkinInfoByCardId(cardId);
+        if (skinEntity == null) return new SyncResult(1, "");
+        return removeSkin(uid, skinEntity.id);
+    }
 
     /**
      * 系统派发皮肤
@@ -230,26 +257,26 @@ public class UserSkinService {
 
     /**
      * 移除皮肤
-     * @param uid uid
+     *
+     * @param uid    uid
      * @param skinId skinId
      * @return SyncResult
      */
     public SyncResult removeSkin(long uid, long skinId) {
         UserSkinEntity userSkinEntity = UserSkinEntity.getInstance()
-                .where("uid",uid)
-                .where("skin_id",skinId)
-                .where("status",1)
+                .where("uid", uid)
+                .where("skin_id", skinId)
+                .where("status", 1)
                 .findEntity();
 
-        if(userSkinEntity == null) return new SyncResult(1,"没有皮肤信息");
+        if (userSkinEntity == null) return new SyncResult(1, "没有皮肤信息");
         Map<String, Object> map = new LinkedHashMap<>();
-        map.put("status",0);
+        map.put("status", 0);
         map.put("update_time", TimeUtil.getTimestamp());
-        long id=UserSkinEntity.getInstance().where("id",userSkinEntity.id).update(map);
-        if(id==0) return new SyncResult(1,"移除失败");
+        long id = UserSkinEntity.getInstance().where("id", userSkinEntity.id).update(map);
+        if (id == 0) return new SyncResult(1, "移除失败");
         return new SyncResult(0, "success");
     }
-
 
 
 }
