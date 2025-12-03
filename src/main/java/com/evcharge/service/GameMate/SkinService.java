@@ -14,6 +14,7 @@ import java.util.Map;
 public class SkinService {
 
 
+
     /**
      * 获取皮肤信息
      *
@@ -44,6 +45,21 @@ public class SkinService {
                 .selectList();
     }
 
+    /**
+     * 获取皮肤信息
+     *
+     * @param cardId
+     * @return
+     */
+    public SkinEntity getSkinInfoByCardId(long cardId) {
+        SkinEntity skinEntity = new SkinEntity();
+        return skinEntity
+                .cache(String.format("GameMate:Skin:Info:%s", cardId), ECacheTime.DAY)
+                .where("card_id", cardId)
+                .where("status", 1)
+                .findEntity();
+
+    }
 
     /**
      * 获取系统皮肤

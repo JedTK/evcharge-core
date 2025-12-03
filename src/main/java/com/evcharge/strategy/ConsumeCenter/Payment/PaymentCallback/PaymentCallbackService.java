@@ -1,5 +1,7 @@
 package com.evcharge.strategy.ConsumeCenter.Payment.PaymentCallback;
 
+import com.xyzs.entity.SyncResult;
+
 import javax.servlet.http.HttpServletRequest;
 
 public interface PaymentCallbackService {
@@ -12,5 +14,9 @@ public interface PaymentCallbackService {
 
 
     String process(HttpServletRequest request);
+
+
+    SyncResult confirmOrder(String orderSn);
+
 
 }

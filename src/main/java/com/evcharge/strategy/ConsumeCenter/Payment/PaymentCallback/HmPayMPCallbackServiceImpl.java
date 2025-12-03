@@ -52,6 +52,13 @@ public class HmPayMPCallbackServiceImpl implements PaymentCallbackService {
             JSONObject body = (JSONObject) query.data;
             //添加到支付记录
             PaymentCallbackLogEntity.getInstance().addLog(outOrderNo, body.toJSONString());
+
+
+            if (!("SUCCESS").equals(body.getString("sub_code"))) {
+                LogsUtil.info("", "回调信息 状态为%s，订单编号=%s", body.getString("sub_code"), outOrderNo);
+                return "error";
+            }
+
             /**
              * TODO 更新订单信息
              */
@@ -85,6 +92,51 @@ public class HmPayMPCallbackServiceImpl implements PaymentCallbackService {
             LogsUtil.error("", "[支付回调],河马支付回调失败，失败原因=%s", e.getMessage());
             LogsUtil.error(e, "", "[支付回调],河马支付回调失败");
             return "error";
+        }
+    }
+
+
+    @Override
+    public SyncResult confirmOrder(String orderSn) {
+        try {
+            HmPaymentSDK hmPaymentSDK = new HmPaymentSDK();
+            SyncResult query = hmPaymentSDK.query(orderSn);
+            if (query.code != 0) {
+                LogsUtil.info("", "[支付回调],河马支付回调失败，失败原因=%s", query.msg);
+                return new SyncResult(1,String.format("[支付回调],河马支付回调失败，失败原因=%s", query.msg));
+            }
+            JSONObject body = (JSONObject) query.data;
+            PaymentCallbackLogEntity.getInstance().addLog(orderSn, body.toJSONString());
+
+            if (!("SUCCESS").equals(body.getString("sub_code"))) {
+                LogsUtil.info("", "回调信息 状态为%s，订单编号=%s", body.getString("sub_code"), orderSn);
+                return new SyncResult(1,String.format("回调信息 状态为%s，订单编号=%s", body.getString("sub_code"), orderSn));
+            }
+
+            ConsumeOrdersEntity consumeOrdersEntity = consumeOrdersService.findByOrderSn(orderSn);
+
+            SyncResult result= consumeOrdersService.paySuccess(
+                    orderSn
+                    ,body.getString("bank_order_no")
+                    ,body.getBigDecimal("total_amount")
+                    ,body.getBigDecimal("settle_amount")
+            );
+            if(result.code != 0) return result;
+            if (consumeOrdersEntity.use_integral > 0) {
+                UserIntegralDetailEntity.getInstance().decrIntegral(consumeOrdersEntity.uid
+                        , -consumeOrdersEntity.use_integral
+                        , EUserIntegralType.Recharge_Deduct //目前只有充值使用积分 其他地方暂时没有使用积分情况，这个需要注意
+                        , consumeOrdersEntity.id
+                        , "充值抵扣积分"
+                );
+            }
+            FulfillmentService fulfillmentService = fulfillmentServiceFactory.getService(consumeOrdersEntity.product_type);
+            fulfillmentService.processFulfillment(consumeOrdersEntity);
+            return new SyncResult(0,"success");
+        } catch (Exception e) {
+            LogsUtil.error("", "[支付回调],河马支付回调失败，失败原因=%s", e.getMessage());
+            LogsUtil.error(e, "", "[支付回调],河马支付回调失败");
+            return new SyncResult(1,e.getMessage());
         }
     }
 }

@@ -83,7 +83,7 @@ public class WechatPayMPCallbackServiceImpl implements PaymentCallbackService {
          * TODO 更新订单信息
          */
         ConsumeOrdersEntity consumeOrdersEntity = consumeOrdersService.findByOrderSn(orderSn);
-        if(consumeOrdersEntity == null) {
+        if (consumeOrdersEntity == null) {
             return "error";
         }
         JSONObject amount = decryptObject.getJSONObject("amount");
@@ -92,13 +92,13 @@ public class WechatPayMPCallbackServiceImpl implements PaymentCallbackService {
                 .divide(new BigDecimal(100), 2, RoundingMode.HALF_UP)
                 .doubleValue();
 
-        SyncResult result= consumeOrdersService.paySuccess(
+        SyncResult result = consumeOrdersService.paySuccess(
                 orderSn
-                ,decryptObject.getString("transaction_id")
+                , decryptObject.getString("transaction_id")
                 , BigDecimal.valueOf(payPrice)
-                ,BigDecimal.valueOf(payPrice)
+                , BigDecimal.valueOf(payPrice)
         );
-        if(result.code != 0) return "error";
+        if (result.code != 0) return "error";
         //如果有消耗积分
         if (consumeOrdersEntity.use_integral > 0) {
             UserIntegralDetailEntity.getInstance().decrIntegral(consumeOrdersEntity.uid
@@ -113,6 +113,61 @@ public class WechatPayMPCallbackServiceImpl implements PaymentCallbackService {
 
         return "";
     }
+
+
+    @Override
+    public SyncResult confirmOrder(String orderSn) {
+        try {
+            WechatPaySDK wechatPaySDK=new WechatPaySDK();
+            SyncResult query = wechatPaySDK.query(orderSn);
+            if (query.code != 0) {
+                LogsUtil.info("", "[支付回调],微信支付回调失败，失败原因=%s", query.msg);
+                return new SyncResult(1,String.format("[支付回调],微信支付回调失败，失败原因=%s", query.msg));
+            }
+            JSONObject body = (JSONObject) query.data;
+            PaymentCallbackLogEntity.getInstance().addLog(orderSn, body.toJSONString());
+
+            String tradeState = body.getString("trade_state");
+            if (!("SUCCESS").equals(tradeState)) {
+                LogsUtil.info("", "回调信息 状态为%s，订单编号=%s", body.getString("sub_code"), orderSn);
+                return new SyncResult(1,String.format("回调信息 状态为%s，订单编号=%s", body.getString("sub_code"), orderSn));
+
+            }
+            ConsumeOrdersEntity consumeOrdersEntity = consumeOrdersService.findByOrderSn(orderSn);
+
+            JSONObject amount = body.getJSONObject("amount");
+            int totalAmount = amount.getIntValue("total");
+            double payPrice = new BigDecimal(totalAmount)
+                    .divide(new BigDecimal(100), 2, RoundingMode.HALF_UP)
+                    .doubleValue();
+
+            SyncResult result = consumeOrdersService.paySuccess(
+                    orderSn
+                    , body.getString("transaction_id")
+                    , BigDecimal.valueOf(payPrice)
+                    , BigDecimal.valueOf(payPrice)
+            );
+            if (result.code != 0) return result;
+            //如果有消耗积分
+            if (consumeOrdersEntity.use_integral > 0) {
+                UserIntegralDetailEntity.getInstance().decrIntegral(consumeOrdersEntity.uid
+                        , -consumeOrdersEntity.use_integral
+                        , EUserIntegralType.Recharge_Deduct //目前只有充值使用积分 其他地方暂时没有使用积分情况，这个需要注意
+                        , consumeOrdersEntity.id
+                        , "充值抵扣积分"
+                );
+            }
+            FulfillmentService fulfillmentService = fulfillmentServiceFactory.getService(consumeOrdersEntity.product_type);
+            fulfillmentService.processFulfillment(consumeOrdersEntity);
+
+            return new SyncResult(0,"success");
+        } catch (Exception e) {
+            LogsUtil.error("", "[支付回调],河马支付回调失败，失败原因=%s", e.getMessage());
+            LogsUtil.error(e, "", "[支付回调],河马支付回调失败");
+            return new SyncResult(1,e.getMessage());
+        }
+    }
+
 
     public static String getBody(HttpServletRequest request) throws IOException {
 
@@ -133,4 +188,6 @@ public class WechatPayMPCallbackServiceImpl implements PaymentCallbackService {
         }
         return stringBuilder.toString();
     }
+
+
 }

@@ -156,7 +156,7 @@ public class HmPaymentSDK {
         //endregion
 
         //region 回调域名
-        String notifyUrl = String.format("%s%s", ConfigManager.getString("sand.hm_notify_url"), callBackUrl);
+        String notifyUrl = String.format("%s%s", ConfigManager.getString("consume.notify_url"), callBackUrl);
         //  notifyUrl = notifyUrl.replaceAll("//", "/");
         //endregion
         System.out.println("notifyUrl+" + notifyUrl);
