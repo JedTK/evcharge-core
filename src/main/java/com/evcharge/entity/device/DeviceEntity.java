@@ -7,8 +7,8 @@ import com.xyzs.entity.DataService;
 import com.xyzs.entity.SyncResult;
 import com.xyzs.utils.*;
 import lombok.Getter;
+import lombok.NonNull;
 import lombok.Setter;
-import org.springframework.lang.NonNull;
 import org.springframework.util.StringUtils;
 
 import java.io.Serializable;
@@ -286,41 +286,32 @@ public class DeviceEntity extends BaseEntity implements Serializable {
      * 通过设备码获取设备的所有信息
      *
      * @param deviceCode 设备码
-     * @return
      */
-    public Map<String, Object> getAllParamsWithDeviceCode(String deviceCode) {
-        SyncResult r = this.beginTransaction(connection -> {
-            Map<String, Object> params = new LinkedHashMap<>();
+    public Map<String, Object> getAllParamsWithDeviceCode(@NonNull String deviceCode) {
+        Map<String, Object> params = new LinkedHashMap<>();
 
-            DeviceEntity deviceEntity = DeviceEntity.getInstance().getWithDeviceCode(deviceCode, false);
-            if (deviceEntity == null || deviceEntity.id == 0) return new SyncResult(1, "no data");
+        DeviceEntity deviceEntity = DeviceEntity.getInstance().getWithDeviceCode(deviceCode, false);
+        if (deviceEntity == null || deviceEntity.id == 0) return null;
 
-            params.put("id", deviceEntity.id);
-            params.put("deviceName", deviceEntity.deviceName);
-            params.put("deviceCode", deviceEntity.deviceCode);
-            params.put("deviceNumber", deviceEntity.deviceNumber);
-            params.put("isHost", deviceEntity.isHost);
+        params.put("id", deviceEntity.id);
+        params.put("deviceName", deviceEntity.deviceName);
+        params.put("deviceCode", deviceEntity.deviceCode);
+        params.put("deviceNumber", deviceEntity.deviceNumber);
+        params.put("isHost", deviceEntity.isHost);
 
-            Map<String, Object> deviceUnit = DeviceUnitEntity.getInstance().getWithUnitId(deviceEntity.deviceUnitId);
-            if (deviceUnit != null && !deviceUnit.isEmpty()) {
-                params.put("deviceUnitName", deviceUnit.get("name"));
-                params.put("previewImage", deviceUnit.get("previewImage"));
-                params.put("maxPower", deviceUnit.get("maxPower"));
-                params.put("brandName", deviceUnit.get("brandName"));
-                params.put("TypeName", deviceUnit.get("TypeName"));
-            }
-
-            return new SyncResult(0, params);
-        });
-        if (r.code != 0) return new LinkedHashMap<>();
-        return (Map<String, Object>) r.data;
+        Map<String, Object> deviceUnit = DeviceUnitEntity.getInstance().getWithUnitId(deviceEntity.deviceUnitId);
+        if (deviceUnit != null && !deviceUnit.isEmpty()) {
+            params.put("deviceUnitName", deviceUnit.get("name"));
+            params.put("previewImage", deviceUnit.get("previewImage"));
+            params.put("maxPower", deviceUnit.get("maxPower"));
+            params.put("brandName", deviceUnit.get("brandName"));
+            params.put("TypeName", deviceUnit.get("TypeName"));
+        }
+        return params;
     }
 
     /**
      * 识别二维码内容，并返回设备号端口等信息
-     *
-     * @param content
-     * @return
      */
     public Map<String, Object> analysisQRCode(String content) {
         content = content.trim();
