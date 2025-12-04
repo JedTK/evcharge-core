@@ -203,7 +203,7 @@ public class UserEntity extends BaseEntity implements Serializable {
 ////                .join("UserSourceInfo i", "u.id=i.uid")
 //                .where("u.id", uid)
 //                .findEntity();
-        return findUserByUid(uid, true);
+        return findUserByUid(uid, false);
     }
 
     /**
@@ -214,7 +214,7 @@ public class UserEntity extends BaseEntity implements Serializable {
      */
     public UserEntity findUserByUid(long uid, boolean inCache) {
         if (uid <= 0) return null;
-        if (inCache) this.cache(String.format("User:Info_UID:%s", uid));
+        if (inCache) this.cache(String.format("User:Info:%s", uid));
         return this.findEntity(uid);
     }
 
