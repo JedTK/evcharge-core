@@ -1,8 +1,10 @@
 package com.evcharge.service.ChargeStation;
 
+import com.alibaba.fastjson2.JSONObject;
 import com.evcharge.entity.admin.AdminBaseEntity;
 import com.evcharge.entity.device.DeviceEntity;
 import com.evcharge.entity.device.DeviceUnitEntity;
+import com.evcharge.entity.device.EGDeviceViewEntity;
 import com.evcharge.entity.device.GeneralDeviceEntity;
 import com.evcharge.entity.station.ChargeStationEntity;
 import com.evcharge.entity.station.InstallWorkOrderEntity;
@@ -11,15 +13,14 @@ import com.evcharge.qrcore.parser.base.QRContent;
 import com.evcharge.service.GeneralDevice.GeneralDeviceService;
 import com.xyzs.entity.DataService;
 import com.xyzs.entity.ISyncResult;
+import com.xyzs.entity.SyncListResult;
 import com.xyzs.entity.SyncResult;
 import com.xyzs.utils.*;
 import lombok.NonNull;
 import org.springframework.util.StringUtils;
+import org.springframework.web.bind.annotation.RequestMapping;
 
-import java.util.HashMap;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 /**
  * 安装设备业务逻辑
@@ -93,6 +94,8 @@ public class InstallDeviceService {
         }
         return new SyncResult(0, "", data);
     }
+
+    // region remark - 绑定设备
 
     /**
      * 绑定充电设备
@@ -226,6 +229,146 @@ public class InstallDeviceService {
                     put("CSId", chargeStationEntity.CSId);
                 }});
         return new SyncResult(0, "");
+    }
+
+    // endregion
+
+    // region remark - 解绑设备
+
+    /**
+     * 解绑设备
+     */
+    public ISyncResult unbindDevice(String OrderSN, String deviceCode, long adminId) {
+        if (!StringUtils.hasLength(OrderSN)) return new SyncResult(2, "缺少[订单号]参数");
+        if (!StringUtils.hasLength(deviceCode)) return new SyncResult(2, "缺少[设备码]参数");
+
+        InstallWorkOrderEntity installWorkOrderEntity = InstallWorkOrderEntity.getInstance()
+                .where("OrderSN", OrderSN)
+                .findEntity();
+        if (installWorkOrderEntity == null || installWorkOrderEntity.id == 0) return new SyncResult(3, "工单不存在");
+        if (installWorkOrderEntity.installer_id != adminId) return new SyncResult(4, "您没有权限操作此工单");
+
+        // 查询充电设备
+        DeviceEntity deviceEntity = DeviceEntity.getInstance().getWithDeviceCode(deviceCode, false);
+        if (deviceEntity != null && deviceEntity.id != 0) {
+            return unbindEvDevice(installWorkOrderEntity, deviceEntity);
+        }
+
+        GeneralDeviceEntity generalDeviceEntity = GeneralDeviceService.getInstance().getWithSerialNumber(deviceCode, false);
+        if (generalDeviceEntity != null && generalDeviceEntity.id != 0) {
+            return unbindGeneralDevice(installWorkOrderEntity, generalDeviceEntity);
+        }
+        return new SyncResult(1, "操作失败");
+    }
+
+    /**
+     * 解绑充电设备
+     *
+     * @param installWorkOrderEntity 安装订单实体类
+     * @param deviceEntity           充电设备实体类
+     */
+    public ISyncResult unbindEvDevice(InstallWorkOrderEntity installWorkOrderEntity, DeviceEntity deviceEntity) {
+        if ("".equals(deviceEntity.CSId) || "0".equals(deviceEntity.CSId)) {
+            return new SyncResult(6, "此设备没有进行过任何绑定");
+        }
+        if (!Objects.equals(deviceEntity.CSId, installWorkOrderEntity.CSId)) {
+            return new SyncResult(7, "您没有权限解绑其他的设备");
+        }
+
+        //如果是主机的话，所有从机都会进行解绑，需要工程师重新扫码绑定所有从机
+        SyncResult r = DataService.getMainDB().beginTransaction(connection -> {
+            //设定待解绑的列表
+            List<DeviceEntity> unbindList = new LinkedList<>();
+            if (deviceEntity.isHost == 1) {
+                //如果是主机则读取所有的从机
+                unbindList = DeviceEntity.getInstance()
+                        .where("hostDeviceId", deviceEntity.id)
+                        .selectList();
+                unbindList.add(deviceEntity);
+            }
+            unbindList.add(deviceEntity);
+
+            List<Object> ids = new LinkedList<>();
+            for (DeviceEntity nd : unbindList) {
+                ids.add(nd.id);
+            }
+
+            int noquery = DeviceEntity.getInstance()
+                    .whereIn("id", ids)
+                    .update(new HashMap<>() {{
+                        put("hostDeviceId", 0);
+                    }});
+            if (noquery == 0) return new SyncResult(11, "更新设备主机ID失败");
+
+            return new SyncResult(0, "");
+        });
+        if (r.code != 0) return r;
+
+        ChargeStationEntity.getInstance().syncSocketCount(installWorkOrderEntity.CSId);
+        LogsUtil.info("", "管理员[%s] 在 %s 中解绑设备[%s][%s - %s]"
+                , AdminBaseEntity.getInstance().getWithId(installWorkOrderEntity.installer_id).account
+                , installWorkOrderEntity.OrderSN
+                , deviceEntity.deviceName
+                , deviceEntity.deviceCode
+                , deviceEntity.deviceNumber);
+
+        DataService.getMainCache().del(String.format("Device:%s:Details", deviceEntity.deviceNumber));
+        DataService.getMainCache().del(String.format("Device:%s:Details", deviceEntity.deviceCode));
+        DataService.getMainCache().del(String.format("Device:%s:ChargeStation", deviceEntity.id));
+
+        return r;
+    }
+
+    /**
+     * 解绑充电设备
+     *
+     * @param installWorkOrderEntity 安装订单实体类
+     * @param deviceEntity           充电设备实体类
+     */
+    public ISyncResult unbindGeneralDevice(InstallWorkOrderEntity installWorkOrderEntity, GeneralDeviceEntity deviceEntity) {
+        if ("".equals(deviceEntity.CSId) || "0".equals(deviceEntity.CSId)) {
+            return new SyncResult(6, "此设备没有进行过任何绑定");
+        }
+        if (!Objects.equals(deviceEntity.CSId, installWorkOrderEntity.CSId)) {
+            return new SyncResult(7, "您没有权限解绑其他的设备");
+        }
+
+        GeneralDeviceEntity.getInstance()
+                .whereIn("serialNumber", deviceEntity.serialNumber)
+                .update(new HashMap<>() {{
+                    put("CSId", "0");
+                }});
+        return new SyncResult(0, "");
+    }
+
+    // endregion
+
+    /**
+     * 获取已经绑定的设备列表
+     */
+    public ISyncResult getBindDeviceList(String OrderSN, long admin_id, int page, int limit) {
+        if (!StringUtils.hasLength(OrderSN)) common.apicb(2, "缺少[订单号]参数");
+
+        if (page <= 0) page = 1;
+        if (limit <= 0) limit = 100;
+
+        InstallWorkOrderEntity installWorkOrderEntity = InstallWorkOrderEntity.getInstance()
+                .where("OrderSN", OrderSN)
+                .findEntity();
+        if (installWorkOrderEntity == null || installWorkOrderEntity.id == 0) return new SyncResult(3, "工单不存在");
+        if (installWorkOrderEntity.installer_id != admin_id) return new SyncResult(4, "您没有权限操作此工单");
+
+        int count = EGDeviceViewEntity.getInstance()
+                .where("CSId", installWorkOrderEntity.CSId)
+                .count();
+        if (count == 0) return new SyncResult(1, "");
+
+        List<EGDeviceViewEntity> list = EGDeviceViewEntity.getInstance()
+                .where("CSId", installWorkOrderEntity.CSId)
+                .page(page, limit)
+                .selectList();
+        if (list.isEmpty()) return new SyncResult(1, "");
+        return new SyncListResult(count, page, limit, list);
     }
 
     /**
