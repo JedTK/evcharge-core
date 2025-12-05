@@ -88,7 +88,7 @@ public class InstallDeviceService {
                 break;
             case URL:
             case TEXT:
-                break;
+                return new SyncResult(0, "", qrCoreContent);
             default:
                 return new SyncResult(1, "未知二维码，无法识别设备");
         }
@@ -334,7 +334,7 @@ public class InstallDeviceService {
         }
 
         GeneralDeviceEntity.getInstance()
-                .whereIn("serialNumber", deviceEntity.serialNumber)
+                .where("serialNumber", deviceEntity.serialNumber)
                 .update(new HashMap<>() {{
                     put("CSId", "0");
                 }});
@@ -379,10 +379,12 @@ public class InstallDeviceService {
     public Map<String, Object> getDeviceProfileByDeviceCode(@NonNull String deviceCode) {
         Map<String, Object> params = new LinkedHashMap<>();
 
+        deviceCode = deviceCode.toUpperCase();
         DeviceEntity deviceEntity = DeviceEntity.getInstance().getWithDeviceCode(deviceCode, false);
         if (deviceEntity == null || deviceEntity.id == 0) return null;
 
         params.put("id", deviceEntity.id);
+        params.put("spuCode", deviceEntity.spuCode);
         params.put("deviceName", deviceEntity.deviceName);
         params.put("deviceCode", deviceEntity.deviceCode);
         params.put("deviceNumber", deviceEntity.deviceNumber);
@@ -411,6 +413,7 @@ public class InstallDeviceService {
         if (deviceEntity == null || deviceEntity.id == 0) return null;
 
         params.put("id", deviceEntity.id);
+        params.put("spuCode", deviceEntity.spuCode);
         params.put("deviceName", deviceEntity.deviceName);
         params.put("deviceCode", deviceEntity.serialNumber);
         params.put("deviceNumber", deviceEntity.serialNumber);

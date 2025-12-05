@@ -92,7 +92,7 @@ public class WindyDeviceQRParser implements IQRCodeParser {
             //   - "00" / "01" 等保留原样
             //   - "ff" 或 "FF" 视为未指定端口，解析为 null
             String port = null;
-            if (StringUtil.isEmpty(portRaw)) {
+            if (!StringUtil.isEmpty(portRaw)) {
                 if (!"ff".equalsIgnoreCase(portRaw)) port = portRaw;
                 else port = "99";
             }

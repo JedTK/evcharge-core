@@ -130,8 +130,8 @@ public class DeviceUnitEntity extends BaseEntity implements Serializable {
         return DeviceUnitEntity.getInstance()
                 .field("a.*,b.brandName,c.name as TypeName")
                 .alias("a")
-                .leftJoin(DeviceBrandEntity.getInstance().theTableName(), "b", "a.brandId = b.id")
-                .rightJoin(DeviceTypeEntity.getInstance().theTableName(), "c", "a.deviceTypeId = c.id")
+                .leftJoin(DeviceBrandEntity.getInstance().theTableName(), "b", "a.brandCode = b.brandCode")
+                .rightJoin(DeviceTypeEntity.getInstance().theTableName(), "c", "a.typeCode = c.typeCode")
                 .where("a.spuCode", spu_code)
                 .find();
     }

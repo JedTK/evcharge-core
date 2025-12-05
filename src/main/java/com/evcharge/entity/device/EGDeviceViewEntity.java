@@ -2,10 +2,12 @@ package com.evcharge.entity.device;
 
 import com.xyzs.entity.BaseEntity;
 
+import java.io.Serializable;
+
 /**
  * 充电设备和通用设备视图实体类
  */
-public class EGDeviceViewEntity extends BaseEntity {
+public class EGDeviceViewEntity extends BaseEntity implements Serializable {
     //region -- 实体类属性 --
     /**
      * 视图主键，对应 Device.id 或 GeneralDevice.id
@@ -84,4 +86,11 @@ public class EGDeviceViewEntity extends BaseEntity {
      */
     public long updateTime;
     // endregion
+
+    /**
+     * 获得一个实例
+     */
+    public static EGDeviceViewEntity getInstance() {
+        return new EGDeviceViewEntity();
+    }
 }
