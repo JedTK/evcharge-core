@@ -101,8 +101,6 @@ public class DeviceUnitEntity extends BaseEntity implements Serializable {
 
     /**
      * 获得一个实例
-     *
-     * @return
      */
     public static DeviceUnitEntity getInstance() {
         return new DeviceUnitEntity();
@@ -120,6 +118,21 @@ public class DeviceUnitEntity extends BaseEntity implements Serializable {
                 .leftJoin(DeviceBrandEntity.getInstance().theTableName(), "b", "a.brandId = b.id")
                 .rightJoin(DeviceTypeEntity.getInstance().theTableName(), "c", "a.deviceTypeId = c.id")
                 .where("a.id", deviceUnitId)
+                .find();
+    }
+
+    /**
+     * 根据单元ID查询设备单元数据
+     *
+     * @param spu_code 设备SPU编码
+     */
+    public Map<String, Object> getBySpuCode(String spu_code) {
+        return DeviceUnitEntity.getInstance()
+                .field("a.*,b.brandName,c.name as TypeName")
+                .alias("a")
+                .leftJoin(DeviceBrandEntity.getInstance().theTableName(), "b", "a.brandId = b.id")
+                .rightJoin(DeviceTypeEntity.getInstance().theTableName(), "c", "a.deviceTypeId = c.id")
+                .where("a.spuCode", spu_code)
                 .find();
     }
 

@@ -3,13 +3,10 @@ package com.evcharge.entity.device;
 
 import com.evcharge.libsdk.windy.WindySDK;
 import com.xyzs.entity.BaseEntity;
-import com.xyzs.entity.DataService;
-import com.xyzs.entity.SyncResult;
 import com.xyzs.utils.*;
 import lombok.Getter;
 import lombok.NonNull;
 import lombok.Setter;
-import org.springframework.util.StringUtils;
 
 import java.io.Serializable;
 import java.util.LinkedHashMap;
@@ -287,7 +284,8 @@ public class DeviceEntity extends BaseEntity implements Serializable {
      *
      * @param deviceCode 设备码
      */
-    public Map<String, Object> getAllParamsWithDeviceCode(@NonNull String deviceCode) {
+    @Deprecated
+    public Map<String, Object> getDeviceProfileByDeviceCode(@NonNull String deviceCode) {
         Map<String, Object> params = new LinkedHashMap<>();
 
         DeviceEntity deviceEntity = DeviceEntity.getInstance().getWithDeviceCode(deviceCode, false);
@@ -299,7 +297,16 @@ public class DeviceEntity extends BaseEntity implements Serializable {
         params.put("deviceNumber", deviceEntity.deviceNumber);
         params.put("isHost", deviceEntity.isHost);
 
-        Map<String, Object> deviceUnit = DeviceUnitEntity.getInstance().getWithUnitId(deviceEntity.deviceUnitId);
+//        Map<String, Object> deviceUnit = DeviceUnitEntity.getInstance().getWithUnitId(deviceEntity.deviceUnitId);
+//        if (deviceUnit != null && !deviceUnit.isEmpty()) {
+//            params.put("deviceUnitName", deviceUnit.get("name"));
+//            params.put("previewImage", deviceUnit.get("previewImage"));
+//            params.put("maxPower", deviceUnit.get("maxPower"));
+//            params.put("brandName", deviceUnit.get("brandName"));
+//            params.put("TypeName", deviceUnit.get("TypeName"));
+//        }
+//        return params;
+        Map<String, Object> deviceUnit = DeviceUnitEntity.getInstance().getBySpuCode(deviceEntity.spuCode);
         if (deviceUnit != null && !deviceUnit.isEmpty()) {
             params.put("deviceUnitName", deviceUnit.get("name"));
             params.put("previewImage", deviceUnit.get("previewImage"));

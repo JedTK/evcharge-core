@@ -108,10 +108,6 @@ public class GeneralDeviceEntity extends BaseEntity implements Serializable {
 
     /**
      * 查询设备详情
-     *
-     * @param serialNumber
-     * @param inCache
-     * @return
      */
     public GeneralDeviceEntity getBySerialNumber(String serialNumber, boolean inCache) {
         GeneralDeviceEntity entity = new GeneralDeviceEntity();

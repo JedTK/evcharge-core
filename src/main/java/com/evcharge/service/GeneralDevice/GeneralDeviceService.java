@@ -14,12 +14,12 @@ import com.xyzs.entity.DataService;
 import com.xyzs.entity.ISyncResult;
 import com.xyzs.entity.SyncResult;
 import com.xyzs.utils.*;
+import lombok.NonNull;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.springframework.http.HttpStatus;
-import org.springframework.lang.NonNull;
 import org.springframework.util.StringUtils;
 
 import javax.servlet.http.HttpServletRequest;
@@ -891,10 +891,6 @@ public class GeneralDeviceService {
 
     /**
      * 导入后处理
-     *
-     * @param serialNumberList
-     * @param deviceUnitEntity
-     * @return
      */
     private boolean importAfterSyncRecord(List<String> serialNumberList, DeviceUnitEntity deviceUnitEntity) {
         if (serialNumberList == null || serialNumberList.isEmpty()) return false;
