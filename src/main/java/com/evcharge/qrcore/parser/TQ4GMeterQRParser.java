@@ -10,48 +10,41 @@ import java.net.URI;
 /**
  * 拓强 4G 电表二维码解析器。
  * <p>
- * 约定二维码内容格式示例:
+ * 支持两类二维码格式：
+ * 1) 旧版纯 URL：
  * https://{任意子域名.tq-ele.com}/{电表编号}.5010060.a7cf8
- * 示例:
- * https://i.tq-ele.com/250110261441.5010060.a7cf8
+ * 例：https://i.tq-ele.com/250110261441.5010060.a7cf8
  * <p>
- * 约定含义:
- * 1) 域名以 tq-ele.com 结尾, 作为拓强电表品牌标识。
- * 例如:
- * i.tq-ele.com
- * www.tq-ele.com
- * 2) 路径最后一段为 "电表编号.其他.其他" 格式:
- * 250110261441.5010060.a7cf8
- * 其中:
- * 250110261441 为设备号 deviceCode
- * 后面的 5010060、a7cf8 等字段含义暂不明确, 当前只作为附加信息保留。
+ * 2) 新版小程序跳转 URL：
+ * https://iot.tqdianbiao.com/Miniprogram/device/?code={电表编号}.5010060.42267
+ * 例：https://iot.tqdianbiao.com/Miniprogram/device/?code=250814261183.5010060.42267
  * <p>
- * 设计目标:
- * 1) 上层只关心是否成功解析以及得到的 deviceCode、品牌信息等。
- * 2) 解析失败时返回 fail, 让上层有机会继续走 UrlQRParser 等兜底逻辑。
- * 3) 不对电表编号做过多业务校验, 只要非空即视为有效。
- * <p>
- * 线程安全性:
- * 本解析器实现无成员变量状态, 所有逻辑都基于入参, 因此是线程安全的。
+ * 核心行为：
+ * - 识别为拓强电表（品牌 CHTQDQ）；
+ * - 提取设备号 device_code（取 "电表编号.其他.其他" 的第一段）；
+ * - 返回 QRContent.QRType.GeneraDevice，并写入 brand_code、spu_code。
  */
 public class TQ4GMeterQRParser implements IQRCodeParser {
 
     /**
-     * 品牌域名后缀。
-     * 支持任意子域名, 例如:
-     * i.tq-ele.com
-     * www.tq-ele.com
+     * 品牌域名后缀列表。
+     * - tq-ele.com：旧域名
+     * - tqdianbiao.com：新域名（iot.tqdianbiao.com 等）
      * <p>
-     * 判断规则为 host 以该后缀结尾。
+     * 判断规则：host 等于后缀，或以 ".后缀" 结尾。
      */
-    private static final String BRAND_DOMAIN_SUFFIX = "tq-ele.com";
+    private static final String[] BRAND_DOMAIN_SUFFIXES = {
+            "tq-ele.com",
+            "tqdianbiao.com"
+    };
 
     /**
-     * SPU编码，目前只和拓强合作4G电表，暂时固定
+     * SPU编码，目前只和拓强合作 4G 电表，暂时固定。
      */
-    private static final String spu_code = "CHTQDQ-4G-DDSY6607-2P";
+    private static final String spu_code = "CHTQDQ-4G-DDSY1886";
+
     /**
-     * 品牌代码
+     * 品牌代码。
      */
     private static final String brand_code = "CHTQDQ";
 
@@ -61,42 +54,22 @@ public class TQ4GMeterQRParser implements IQRCodeParser {
         String text = content.trim();
         if (StringUtil.isEmpty(text)) return false;
 
-        // 必须是 http 或 https 开头的 URL
-        // 这样可以避免和纯文本解析器发生冲突
+        // 必须是 http 或 https 开头，避免和纯文本解析器冲突
         if (!text.startsWith("http://") && !text.startsWith("https://")) return false;
 
         try {
             URI uri = URI.create(text);
 
-            // 1. 域名校验: 要求 host 以 tq-ele.com 结尾
+            // 1. 域名校验：必须是拓强相关域名
             String host = uri.getHost();
-            if (host == null || host.isEmpty()) return false;
+            if (StringUtil.isEmpty(host)) return false;
+            if (!isTQHost(host)) return false;
 
-            // 不区分大小写, 支持任意子域名
-            if (!host.toLowerCase().endsWith(BRAND_DOMAIN_SUFFIX)) return false;
-
-            // 2. 路径校验: 只关注最后一段
-            //    示例路径: /250110261441.5010060.a7cf8
-            String path = uri.getPath();
-            if (path == null || path.isEmpty()) return false;
-
-            // 按 "/" 拆分路径, 取最后一段
-            String[] pathParts = path.split("/");
-            if (pathParts.length == 0) return false;
-
-            String lastSegment = pathParts[pathParts.length - 1];
-            if (lastSegment == null || lastSegment.isEmpty()) return false;
-
-            // 3. 最后一段按 "." 拆分, 取第一个部分作为设备号
-            //    示例: "250110261441.5010060.a7cf8"
-            //    拆分后: ["250110261441", "5010060", "a7cf8"]
-            String[] tokens = lastSegment.split("\\.");
-            if (tokens.length == 0) return false;
-
-            String meterCode = tokens[0];
-            return meterCode != null && !meterCode.isEmpty();
+            // 2. 尝试从 URL 中提取电表编号
+            String meterCode = extractMeterCode(uri);
+            return !StringUtil.isEmpty(meterCode);
         } catch (Exception e) {
-            // URL 解析异常, 直接视为不支持
+            // URL 解析异常，视为不支持
             return false;
         }
     }
@@ -105,41 +78,154 @@ public class TQ4GMeterQRParser implements IQRCodeParser {
     public QRContent parse(String content) {
         try {
             URI uri = URI.create(content.trim());
-            String path = uri.getPath();
-            String[] pathParts = path.split("/");
 
-            String lastSegment = pathParts[pathParts.length - 1];
-            String[] tokens = lastSegment.split("\\.");
-
-            // 按约定, 第一个部分为电表编号
-            String meterCode = tokens.length > 0 ? tokens[0] : null;
-            if (meterCode == null || meterCode.isEmpty()) {
+            String meterCode = extractMeterCode(uri);
+            if (StringUtil.isEmpty(meterCode)) {
                 QRContent fail = QRContent.fail("拓强电表二维码缺少电表编号");
                 fail.content = content;
                 return fail;
             }
 
-            // 这里假设 QRType 中存在 DEVICE 枚举
-            // 如果你的枚举里有更细分的类型, 可以替换为更具体的类型, 比如 METER_DEVICE 等
             QRContent result = QRContent.ok(QRContent.QRType.GeneraDevice);
             result.content = content;
-
-            // 设备号写入统一字段 device_code
             result.device_code = meterCode;
 
-            // data 中保存更细节的信息, 方便后续业务使用或排查问题
-            if (result.data == null) result.data = new JSONObject();
+            if (result.data == null) {
+                result.data = new JSONObject();
+            }
 
-            // 基础信息
+            // 基础设备信息
             result.data.put("spu_code", spu_code);
             result.data.put("brand_code", brand_code);
+
+            // 可选：留存完整的 code 串，便于排查问题（从 query 或 path 中拿）
+            String rawCode = extractRawCode(uri);
+            if (!StringUtil.isEmpty(rawCode)) {
+                result.data.put("raw_code", rawCode);
+            }
+
+            // 可选：记录识别到的是哪种格式（旧 URL / 小程序 URL）
+            result.data.put("qr_format", detectFormat(uri));
+
             return result;
         } catch (Exception e) {
-            // 单个解析器内部发生异常时, 不应该影响整体解析流程
-            // 这里返回一个 fail, 让上层 QRCoreParser 有机会继续使用其他解析器处理
             QRContent fail = QRContent.fail("拓强电表二维码解析异常");
             fail.content = content;
             return fail;
         }
+    }
+
+    /**
+     * 判断 host 是否为拓强相关域名。
+     * 规则：等于后缀，或以 ".后缀" 结尾。
+     */
+    private boolean isTQHost(String host) {
+        String h = host.toLowerCase();
+        for (String suffix : BRAND_DOMAIN_SUFFIXES) {
+            String s = suffix.toLowerCase();
+            if (h.equals(s) || h.endsWith("." + s)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * 从 URI 中提取“电表编号”。
+     * 优先级：
+     * 1) 新版：query 中的 code 参数，如 ?code=250814261183.5010060.42267
+     * 2) 旧版：path 最后一段，如 /250110261441.5010060.a7cf8
+     * <p>
+     * 返回值：
+     * - 非空：电表编号（第一个 "." 之前的部分）
+     * - 为空：未能提取
+     */
+    private String extractMeterCode(URI uri) {
+        // 1. 先尝试从 query 的 code 参数解析
+        String rawCodeFromQuery = extractCodeFromQuery(uri);
+        if (!StringUtil.isEmpty(rawCodeFromQuery)) {
+            String[] tokens = rawCodeFromQuery.split("\\.");
+            if (tokens.length > 0 && !StringUtil.isEmpty(tokens[0])) {
+                return tokens[0];
+            }
+        }
+
+        // 2. 回退到旧版 path 规则
+        String rawCodeFromPath = extractCodeFromPath(uri);
+        if (!StringUtil.isEmpty(rawCodeFromPath)) {
+            String[] tokens = rawCodeFromPath.split("\\.");
+            if (tokens.length > 0 && !StringUtil.isEmpty(tokens[0])) {
+                return tokens[0];
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * 提取“完整 code 串”，用于记录到 data.raw_code。
+     * 优先使用 query 中的 code，其次是 path 最后一段。
+     */
+    private String extractRawCode(URI uri) {
+        String rawCode = extractCodeFromQuery(uri);
+        if (!StringUtil.isEmpty(rawCode)) return rawCode;
+        return extractCodeFromPath(uri);
+    }
+
+    /**
+     * 从 query 中提取 code 参数。
+     * 例如：?code=250814261183.5010060.42267
+     */
+    private String extractCodeFromQuery(URI uri) {
+        String query = uri.getQuery();
+        if (StringUtil.isEmpty(query)) return null;
+
+        String[] pairs = query.split("&");
+        for (String pair : pairs) {
+            if (StringUtil.isEmpty(pair)) continue;
+            int idx = pair.indexOf('=');
+            if (idx <= 0 || idx == pair.length() - 1) continue;
+
+            String key = pair.substring(0, idx);
+            String value = pair.substring(idx + 1);
+            if ("code".equalsIgnoreCase(key) && !StringUtil.isEmpty(value)) {
+                return value;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * 从 path 最后一段提取“完整 code 串”。
+     * 例如：/250110261441.5010060.a7cf8
+     * 返回：250110261441.5010060.a7cf8
+     */
+    private String extractCodeFromPath(URI uri) {
+        String path = uri.getPath();
+        if (StringUtil.isEmpty(path)) return null;
+
+        String[] pathParts = path.split("/");
+        if (pathParts.length == 0) return null;
+
+        String lastSegment = pathParts[pathParts.length - 1];
+        if (StringUtil.isEmpty(lastSegment)) return null;
+
+        return lastSegment;
+    }
+
+    /**
+     * 检测二维码格式类型，主要用于调试和排障。
+     * - new_miniprogram：query 中携带 code 参数
+     * - legacy_path：老版路径携带设备号
+     * - unknown：未命中上述两类
+     */
+    private String detectFormat(URI uri) {
+        if (!StringUtil.isEmpty(extractCodeFromQuery(uri))) {
+            return "new_miniprogram";
+        }
+        if (!StringUtil.isEmpty(extractCodeFromPath(uri))) {
+            return "legacy_path";
+        }
+        return "unknown";
     }
 }

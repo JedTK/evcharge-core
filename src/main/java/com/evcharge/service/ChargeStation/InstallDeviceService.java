@@ -1,6 +1,5 @@
 package com.evcharge.service.ChargeStation;
 
-import com.alibaba.fastjson2.JSONObject;
 import com.evcharge.entity.admin.AdminBaseEntity;
 import com.evcharge.entity.device.DeviceEntity;
 import com.evcharge.entity.device.DeviceUnitEntity;
@@ -18,7 +17,6 @@ import com.xyzs.entity.SyncResult;
 import com.xyzs.utils.*;
 import lombok.NonNull;
 import org.springframework.util.StringUtils;
-import org.springframework.web.bind.annotation.RequestMapping;
 
 import java.util.*;
 
