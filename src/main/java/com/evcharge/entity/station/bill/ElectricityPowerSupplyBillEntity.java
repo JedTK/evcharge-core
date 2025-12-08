@@ -122,6 +122,10 @@ public class ElectricityPowerSupplyBillEntity extends BaseEntity implements Seri
      * 发票
      */
     public String invoice;
+    /**
+     * 电费账单,;
+     */
+    public Double electricity_fee_total;
 
     /**
      * 平台代码
