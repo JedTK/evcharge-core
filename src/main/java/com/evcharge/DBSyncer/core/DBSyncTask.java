@@ -300,8 +300,7 @@ public class DBSyncTask implements IDBSyncTask {
             boolean isAdd = syncRecord.isEmpty();
             if (isAdd) syncRecord.put(SlavePrimaryKey, pk);
 
-            if (iDataSyncListener != null) iDataSyncListener.onBeforeSyncRecord(mainRecord, syncRecord);
-
+            // 1) 默认字段映射：无论是否有监听器，都先把主表字段复制过去
             for (DBSyncTableField field : FieldMapping) {
                 if (StringUtil.isEmpty(field.mainField) || StringUtil.isEmpty(field.slaveField)) continue;
                 if (field.slaveField.equalsIgnoreCase(SlavePrimaryKey)) continue;
@@ -317,7 +316,10 @@ public class DBSyncTask implements IDBSyncTask {
                 }
             }
 
-            // 执行新增或更新
+            // 2) 监听器最后一刀：在默认映射的基础上进行加工/覆盖/删除
+            if (iDataSyncListener != null) iDataSyncListener.onBeforeSyncRecord(mainRecord, syncRecord);
+
+            // 3) 执行新增或更新
             if (isAdd) {
                 slaveDB.insert(syncRecord);
                 LogsUtil.info(TAG, "%s.%s ====> %s.%s           新增 - %s=%s", mainDBName, mainTableName, slaveDBName, slaveTableName, SlavePrimaryKey, pk);
