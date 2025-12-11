@@ -27,13 +27,13 @@ import java.util.Map;
 public class DashboardStationV2ServiceImpl implements DashboardStationV2Service {
 
 
-    public JSONObject getGeneralDeviceForPage(RegionPageRequest request, String keyword,String type) {
+    public JSONObject getGeneralDeviceForPage(RegionPageRequest request, String keyword, String type) {
         String cacheKey = String.format("Dashboard:V2:SprayList:%s%s%s%s:%s:%s,%s",
                 request.getProvinceCode()
                 , request.getCityCode()
                 , request.getDistrictCode()
                 , request.getStreetCode()
-                ,type
+                , type
                 , request.getPage()
                 , request.getLimit()
         );
@@ -42,7 +42,7 @@ public class DashboardStationV2ServiceImpl implements DashboardStationV2Service 
                 , request.getCityCode()
                 , request.getDistrictCode()
                 , request.getStreetCode()
-                ,type
+                , type
                 , request.getPage()
                 , request.getLimit()
         );
@@ -84,14 +84,14 @@ public class DashboardStationV2ServiceImpl implements DashboardStationV2Service 
                     .find();
 
             if (inspectStation != null) {
-                map.put("station_name",MapUtil.getString(inspectStation,"name"));
-                map.put("province",MapUtil.getString(inspectStation,"province"));
-                map.put("city",MapUtil.getString(inspectStation,"city"));
-                map.put("district",MapUtil.getString(inspectStation,"district"));
-                map.put("street",MapUtil.getString(inspectStation,"street"));
-                map.put("communities",MapUtil.getString(inspectStation,"communities"));
-                map.put("roads",MapUtil.getString(inspectStation,"roads"));
-                map.put("address",MapUtil.getString(inspectStation,"address"));
+                map.put("station_name", MapUtil.getString(inspectStation, "name"));
+                map.put("province", MapUtil.getString(inspectStation, "province"));
+                map.put("city", MapUtil.getString(inspectStation, "city"));
+                map.put("district", MapUtil.getString(inspectStation, "district"));
+                map.put("street", MapUtil.getString(inspectStation, "street"));
+                map.put("communities", MapUtil.getString(inspectStation, "communities"));
+                map.put("roads", MapUtil.getString(inspectStation, "roads"));
+                map.put("address", MapUtil.getString(inspectStation, "address"));
                 String uuid = MapUtil.getString(inspectStation, "uuid");
                 //获取紧急联系人
                 InspectContactInfo inspectContactInfo = InspectQueryHelper.getInspectEmergencyContact(uuid);
@@ -293,7 +293,7 @@ public class DashboardStationV2ServiceImpl implements DashboardStationV2Service 
 //                .setScale(2, RoundingMode.HALF_UP); // 然后四舍五入到2位小数; // 先计算并保留4位
         Map<String, Object> data = new LinkedHashMap<>();
         BigDecimal socketCount = new BigDecimal(helper.socketCount());
-        BigDecimal chargingCount=helper.getSocketUseRateBetweenDays(0,0)
+        BigDecimal chargingCount = helper.getSocketUseRateBetweenDays(0, 0)
                 .multiply(socketCount)
                 .setScale(0, RoundingMode.HALF_UP);
         data.put("charging_count", chargingCount);
@@ -334,7 +334,7 @@ public class DashboardStationV2ServiceImpl implements DashboardStationV2Service 
                 .where("create_time", ">", monthTime)
                 .group("month")
                 .select();
-        if(list.isEmpty()) return common.apicb(1,"No data available.");
+        if (list.isEmpty()) return common.apicb(1, "No data available.");
         DataService.getMainCache().setList(cacheKey, list, ECacheTime.DAY);
 
         return common.apicb(0, "success", list);
@@ -367,7 +367,7 @@ public class DashboardStationV2ServiceImpl implements DashboardStationV2Service 
                 .where("create_time", ">", monthTime)
                 .group("month")
                 .select();
-        if(list.isEmpty()) return common.apicb(1,"No data available.");
+        if (list.isEmpty()) return common.apicb(1, "No data available.");
         DataService.getMainCache().setList(cacheKey, list, ECacheTime.DAY);
 
         return common.apicb(0, "success", list);
@@ -385,13 +385,13 @@ public class DashboardStationV2ServiceImpl implements DashboardStationV2Service 
         String cacheKey = String.format("Dashboard:V2:Station:UserCountChart:day:%s"
                 , days
         );
-
+        long currentTime = TimeUtil.getTime00();
         List<Map<String, Object>> cache = DataService.getMainCache().getList(cacheKey);
         if (!cache.isEmpty()) {
             return common.apicb(0, "success", cache);
         }
 
-        long dayTime = TimeUtil.getTime00(-days);
+        long dayTime = TimeUtil.getTime00(-(days+1));
         System.out.println(dayTime);
         ISqlDBObject db = DataService.getDB().name("User");
 
@@ -399,9 +399,22 @@ public class DashboardStationV2ServiceImpl implements DashboardStationV2Service 
                 .field(" DATE_FORMAT(FROM_UNIXTIME(create_time / 1000), '%Y-%m-%d') AS day, COUNT(*) AS user_count")
                 .where("status", 0)
                 .where("create_time", ">", dayTime)
+                .where("create_time", "<", currentTime)
                 .group("day")
                 .select();
         if (list.isEmpty()) return common.apicb(1, "No data available.");
+
+        int totalUserCount = 0;
+        for (int i = 0; i < list.size(); i++) {
+            Map<String, Object> map = list.get(i);
+            if (i == 0) {
+                totalUserCount = MapUtil.getInt(map, "user_count");
+                continue;
+            }
+            totalUserCount = totalUserCount + MapUtil.getInt(map, "user_count");
+            map.put("user_count", totalUserCount);
+        }
+
 
         DataService.getMainCache().setList(cacheKey, list, ECacheTime.DAY);
 
@@ -416,7 +429,7 @@ public class DashboardStationV2ServiceImpl implements DashboardStationV2Service 
      * @return JSONObject
      */
     public JSONObject getChargeChartByDay(RegionRequest request, int days) {
-
+        long currentTime = TimeUtil.getTime00();
         String cacheKey = String.format("Dashboard:V2:Station:ChargeChart:day:%s%s%s%s,%s"
                 , request.getProvinceCode()
                 , request.getCityCode()
@@ -430,7 +443,7 @@ public class DashboardStationV2ServiceImpl implements DashboardStationV2Service 
             return common.apicb(0, "success", cache);
         }
 
-        long dayTime = TimeUtil.getTime00(-days);
+        long dayTime = TimeUtil.getTime00(-(days+1));
         ISqlDBObject db = DataService.getDB().name("ChargeOrderView");
 
         db = new RegionQueryBuilder(request).applyTo(db);
@@ -439,12 +452,27 @@ public class DashboardStationV2ServiceImpl implements DashboardStationV2Service 
                 .field(" DATE_FORMAT(FROM_UNIXTIME(create_time / 1000), '%Y-%m-%d') AS day, COUNT(*) AS charge_count")
                 .where("status", 2)
                 .where("create_time", ">", dayTime)
+                .where("create_time", "<", currentTime)
                 .group("day")
                 .select();
 
         if (list.isEmpty()) return common.apicb(1, "No data available.");
 
         DataService.getMainCache().setList(cacheKey, list, ECacheTime.DAY);
+
+        int totalChargeCount = 0;
+        for (int i = 0; i < list.size(); i++) {
+            Map<String, Object> map = list.get(i);
+            if (i == 0) {
+                totalChargeCount = MapUtil.getInt(map, "charge_count");
+                continue;
+            }
+            totalChargeCount = totalChargeCount + MapUtil.getInt(map, "charge_count");
+            map.put("charge_count", totalChargeCount);
+        }
+
+
+
 
         return common.apicb(0, "success", list);
     }
