@@ -10,10 +10,7 @@ import com.evcharge.entity.station.*;
 import com.evcharge.entity.sys.SysMessageEntity;
 import com.evcharge.enumdata.ECacheTime;
 import com.evcharge.enumdata.ENotifyType;
-import com.evcharge.mqtt.XMQTT3AsyncClient;
-import com.evcharge.qrcore.parser.QRCoreParser;
-import com.evcharge.qrcore.parser.base.QRContent;
-import com.evcharge.service.GeneralDevice.GeneralDeviceService;
+import com.evcharge.mqtt.XMQTTFactory;
 import com.evcharge.service.meter.TQ4GMeterService;
 import com.evcharge.service.notify.NotifyService;
 import com.xyzs.entity.DataService;
@@ -210,7 +207,7 @@ public class ChargeStationService {
                     }
 
                     // MQTT 下发停止充电命令
-                    XMQTT3AsyncClient.getInstance().publish(
+                    XMQTTFactory.getInstance().publish(
                             String.format("%s/%s/command/stopCharge", deviceEntity.appChannelCode, deviceCode),
                             json
                     );
@@ -335,7 +332,7 @@ public class ChargeStationService {
                     requestBody.put("status", gateStatus); // 0=断电，1=通电
 
                     // 主题格式：{appChannelCode}/{deviceCode}/command/gateOp
-                    XMQTT3AsyncClient.getInstance().publish(
+                    XMQTTFactory.getInstance().publish(
                             String.format("%s/%s/command/gateOp", appChannelCode, deviceCode),
                             requestBody,
                             1 // QoS = 1：至少一次
@@ -496,7 +493,7 @@ public class ChargeStationService {
                 JSONObject requestBody = new JSONObject();
                 requestBody.put("deviceCode", deviceCode);
                 requestBody.put("status", gateStatus);
-                XMQTT3AsyncClient.getInstance().publish(String.format("%s/%s/command/gateOp", appChannelCode, deviceCode), requestBody, 1);
+                XMQTTFactory.getInstance().publish(String.format("%s/%s/command/gateOp", appChannelCode, deviceCode), requestBody, 1);
                 //endregion
 
                 ThreadUtil.sleep(100);

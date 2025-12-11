@@ -20,7 +20,7 @@ import com.evcharge.enumdata.ECacheTime;
 import com.evcharge.enumdata.EChargeMode;
 import com.evcharge.enumdata.EChargeType;
 import com.evcharge.enumdata.EChargePaymentType;
-import com.evcharge.mqtt.XMQTT3AsyncClient;
+import com.evcharge.mqtt.XMQTTFactory;
 import com.evcharge.service.User.UserMemberService;
 import com.xyzs.entity.DataService;
 import com.xyzs.entity.SyncResult;
@@ -737,7 +737,7 @@ public class EvChargeHelper {
          *  订阅（平台-->推送-->中转站）：{应用通道}/{设备编号}/command/业务逻辑函数名
          *  推送（中转站-->推送-->平台）：{平台代码}/{应用通道}/{设备编号}/业务逻辑函数名
          */
-        XMQTT3AsyncClient.getInstance().publish(String.format("%s/%s/command/startCharge", deviceEntity.appChannelCode, deviceEntity.deviceCode), json, 1);
+        XMQTTFactory.getInstance().publish(String.format("%s/%s/command/startCharge", deviceEntity.appChannelCode, deviceEntity.deviceCode), json, 1);
 
         //endregion
 
@@ -768,7 +768,7 @@ public class EvChargeHelper {
      *                     <p>
      *                     返回值说明：
      * @return true  表示父链尚未扣过安心充（可扣费）
-     * @return false 表示父链中已存在已扣费的安心充订单（不要再扣）
+     *         false 表示父链中已存在已扣费的安心充订单（不要再扣）
      * <p>
      * 其他说明：
      * - 最大遍历层数 MAX_HOPS = 5，用于防止异常循环或过深链路。

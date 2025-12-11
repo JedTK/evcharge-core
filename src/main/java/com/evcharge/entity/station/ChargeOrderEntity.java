@@ -16,7 +16,7 @@ import com.evcharge.enumdata.ECacheTime;
 import com.evcharge.enumdata.EChargePaymentType;
 import com.evcharge.enumdata.ENotifyType;
 import com.evcharge.libsdk.wechat.WechatSubscribeTmplSDK;
-import com.evcharge.mqtt.XMQTT3AsyncClient;
+import com.evcharge.mqtt.XMQTTFactory;
 import com.evcharge.service.User.UserSummaryService;
 import com.evcharge.service.notify.NotifyService;
 import com.evcharge.task.ParkingMonitorApp;
@@ -467,7 +467,7 @@ public class ChargeOrderEntity extends BaseEntity implements Serializable {
             json.put("ChargeMode", orderEntity.chargeMode);
             json.put("port", orderEntity.port);//端口
             json.put("OrderSN", OrderSN);
-            XMQTT3AsyncClient.getInstance().publish(String.format("%s/%s/command/stopCharge"
+            XMQTTFactory.getInstance().publish(String.format("%s/%s/command/stopCharge"
                             , deviceEntity.appChannelCode
                             , orderEntity.deviceCode)
                     , json.toJSONString());

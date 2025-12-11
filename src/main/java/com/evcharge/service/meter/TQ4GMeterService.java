@@ -6,7 +6,7 @@ import com.evcharge.entity.device.GeneralDeviceEntity;
 import com.evcharge.entity.sys.SysGlobalConfigEntity;
 import com.evcharge.enumdata.ENotifyType;
 import com.evcharge.libsdk.tq.TQDianBiaoSDK;
-import com.evcharge.mqtt.XMQTT3AsyncClient;
+import com.evcharge.mqtt.XMQTTFactory;
 import com.evcharge.service.GeneralDevice.GeneralDeviceService;
 import com.evcharge.service.GeneralDevice.Meter.SmartMeterRecordService;
 import com.evcharge.service.notify.NotifyService;
@@ -14,7 +14,6 @@ import com.xyzs.entity.DataService;
 import com.xyzs.entity.ISyncResult;
 import com.xyzs.entity.SyncResult;
 import com.xyzs.utils.*;
-import org.springframework.web.bind.annotation.RequestMapping;
 
 import java.math.BigDecimal;
 import java.util.*;
@@ -94,7 +93,7 @@ public class TQ4GMeterService {
                  *  订阅（平台-->推送-->中转站）：{应用通道}/{设备编号}/command/业务逻辑函数名
                  *  推送（中转站-->推送-->平台）：{平台代码}/{应用通道}/{设备编号}/业务逻辑函数名
                  */
-                XMQTT3AsyncClient.getInstance().publish("GeneralDevice/4GEM/command/meter_batch_read", json, 1);
+                XMQTTFactory.getInstance().publish("GeneralDevice/4GEM/command/meter_batch_read", json, 1);
             } else {
                 // 单机直接执行抄表
                 readTaskJobWithList(list);
@@ -236,7 +235,7 @@ public class TQ4GMeterService {
         requestBody.put("keep_alive", keep_alive); // 0=解除保电，1=保电
 
         // 主题格式：{appChannelCode}/{deviceCode}/command/gateOp
-        XMQTT3AsyncClient.getInstance().publish(
+        XMQTTFactory.getInstance().publish(
                 String.format("%s/%s/command/gate_switch", appChannelCode, serialNumber)
                 , requestBody
                 , 1

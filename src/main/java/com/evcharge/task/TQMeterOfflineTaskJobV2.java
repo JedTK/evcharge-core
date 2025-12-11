@@ -1,22 +1,10 @@
 package com.evcharge.task;
 
-import com.alibaba.fastjson2.JSONArray;
-import com.alibaba.fastjson2.JSONObject;
-import com.evcharge.entity.device.GeneralDeviceEntity;
-import com.evcharge.entity.sys.SysGlobalConfigEntity;
-import com.evcharge.libsdk.tq.TQDianBiaoSDK;
-import com.evcharge.mqtt.XMQTT3AsyncClient;
 import com.evcharge.service.meter.TQ4GMeterService;
-import com.xyzs.entity.ISyncResult;
 import com.xyzs.entity.SyncResult;
 import com.xyzs.task.QuartzSchedulerManager;
 import com.xyzs.utils.*;
 import org.quartz.*;
-
-import java.util.ArrayList;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
 
 /**
  * 浙江拓强 - 4G电能表定时抄表任务

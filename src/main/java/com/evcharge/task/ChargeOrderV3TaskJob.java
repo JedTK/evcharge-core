@@ -10,7 +10,7 @@ import com.evcharge.enumdata.EBillingType;
 import com.evcharge.enumdata.ECacheTime;
 import com.evcharge.enumdata.EChargePaymentType;
 import com.evcharge.enumdata.EPaymentOrderType;
-import com.evcharge.mqtt.XMQTT3AsyncClient;
+import com.evcharge.mqtt.XMQTTFactory;
 import com.xyzs.entity.DataService;
 import com.xyzs.entity.SyncResult;
 import com.xyzs.task.QuartzSchedulerManager;
@@ -233,7 +233,7 @@ public class ChargeOrderV3TaskJob implements Job {
                     json.put("ChargeMode", orderEntity.chargeMode);
                     json.put("port", orderEntity.port); // 端口
                     json.put("OrderSN", OrderSN);
-                    XMQTT3AsyncClient.getInstance().publish(String.format("EvCharge/%s/%s/command/stopCharge", deviceEntity.brandCode, orderEntity.deviceCode), json.toJSONString());
+                    XMQTTFactory.getInstance().publish(String.format("EvCharge/%s/%s/command/stopCharge", deviceEntity.brandCode, orderEntity.deviceCode), json.toJSONString());
                 }
                 // 设备不在线，进行软结算
                 else if (status == 0) {
@@ -328,7 +328,7 @@ public class ChargeOrderV3TaskJob implements Job {
                  *  订阅（平台-->推送-->中转站）：{应用通道}/{设备编号}/command/业务逻辑函数名
                  *  送（中转站-->推送-->平台）：{平台代码}/{应用通道}/{设备编号}/业务逻辑函数名
                  */
-                XMQTT3AsyncClient.getInstance().publish(String.format("%s/%s/command/stopCharge"
+                XMQTTFactory.getInstance().publish(String.format("%s/%s/command/stopCharge"
                                 , deviceEntity.appChannelCode
                                 , deviceEntity.deviceCode)
                         , mqtt_data.toJSONString());

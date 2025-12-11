@@ -6,7 +6,7 @@ import com.evcharge.entity.device.DeviceEntity;
 import com.evcharge.entity.device.DeviceSocketEntity;
 import com.evcharge.entity.sys.SysMessageEntity;
 import com.evcharge.enumdata.ENotifyType;
-import com.evcharge.mqtt.XMQTT3AsyncClient;
+import com.evcharge.mqtt.XMQTTFactory;
 import com.evcharge.service.notify.NotifyService;
 import com.xyzs.entity.BaseEntity;
 import com.xyzs.entity.SyncResult;
@@ -443,7 +443,7 @@ public class ChargeStationEntity extends BaseEntity implements Serializable {
                 continue;
             }
 
-            XMQTT3AsyncClient.getInstance().publish(String.format("%s/%s/command/stopCharge", deviceEntity.appChannelCode, deviceCode), json);
+            XMQTTFactory.getInstance().publish(String.format("%s/%s/command/stopCharge", deviceEntity.appChannelCode, deviceCode), json);
             successCount++;
         }
 
@@ -503,7 +503,7 @@ public class ChargeStationEntity extends BaseEntity implements Serializable {
                 continue;
             }
 
-            XMQTT3AsyncClient.getInstance().publish(String.format("%s/%s/command/stopCharge", deviceEntity.appChannelCode, deviceCode), json);
+            XMQTTFactory.getInstance().publish(String.format("%s/%s/command/stopCharge", deviceEntity.appChannelCode, deviceCode), json);
             successCount++;
         }
 
