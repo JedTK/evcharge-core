@@ -496,7 +496,6 @@ public class XMQTTClientV5 implements IXMQTTClient {
      * @param qos            消息质量等级：0=最多一次，1=至少一次，2=仅一次
      * @param retained       是否保留该消息
      * @param iAsyncListener 异步监听是否推送成功
-     * @return 是否成功发送消息（注意：异步发送，true 只表示发送动作已触发）
      */
     @Override
     public void publish(@NonNull String topic, String content, int qos, boolean retained, IAsyncListener iAsyncListener) {
