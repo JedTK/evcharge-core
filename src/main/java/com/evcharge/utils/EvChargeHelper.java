@@ -25,6 +25,7 @@ import com.evcharge.service.User.UserMemberService;
 import com.xyzs.entity.DataService;
 import com.xyzs.entity.SyncResult;
 import com.xyzs.utils.*;
+import org.bouncycastle.pqc.crypto.xmss.XMSSAddress;
 import org.springframework.lang.NonNull;
 import org.springframework.util.StringUtils;
 
@@ -210,9 +211,6 @@ public class EvChargeHelper {
 
     /**
      * 2024-01-24新增
-     *
-     * @param isDisabledUser
-     * @return
      */
     public EvChargeHelper setIsDisabledUser(int isDisabledUser) {
         this.is_disabled_user = isDisabledUser;
@@ -223,7 +221,6 @@ public class EvChargeHelper {
      * 2024-08-16新增
      *
      * @param couponId 优惠券id
-     * @return
      */
     public EvChargeHelper setCouponId(long couponId) {
         this.coupon_id = couponId;
@@ -237,8 +234,6 @@ public class EvChargeHelper {
 
     /**
      * 开始充电
-     *
-     * @return
      */
     public SyncResult start() {
         //region 检查传入参数
@@ -337,7 +332,30 @@ public class EvChargeHelper {
         //endregion
 
         //region 检查此端口是否有充电订单正在进行中
-        if (ChargeOrderEntity.getInstance().where("deviceCode", deviceCode).where("port", port).where("status", 1).exist()) {
+        if (ChargeOrderEntity.getInstance()
+                .where("deviceCode", deviceCode)
+                .where("port", port)
+                .where("status", 1)
+                .exist()) {
+
+            // TODO 临时调用结束充电
+            ChargeOrderEntity tempOrderEntity = ChargeOrderEntity.getInstance()
+                    .where("deviceCode", deviceCode)
+                    .where("port", port)
+                    .where("status", 1)
+                    .findEntity();
+            if (tempOrderEntity != null) {
+                JSONObject json = new JSONObject();
+                json.put("deviceCode", tempOrderEntity.deviceCode);
+                json.put("ChargeMode", tempOrderEntity.chargeMode);
+                json.put("port", tempOrderEntity.port);//端口
+                json.put("OrderSN", tempOrderEntity.OrderSN);
+                XMQTTFactory.getInstance().publish(String.format("%s/%s/command/stopCharge"
+                        , deviceEntity.appChannelCode
+                        , tempOrderEntity.deviceCode
+                ), json.toJSONString());
+                ThreadUtil.sleep(5);
+            }
             return new SyncResult(614, "此设备正在使用中...");
         }
         //endregion
@@ -422,7 +440,12 @@ public class EvChargeHelper {
          * 后面10位是10进制设备号+端口号 如：
          * 20200615113914002978611105276501
          */
-        String OrderSN = String.format("%s%s%s%s", TimeUtil.toTimeString(TimeUtil.getTimestamp(), "yyyyMMddHHmmss"), common.randomInt(10000000, 99999999), common.randomInt(10000000, 99999999), common.randomInt(10, 99));
+        String OrderSN = String.format("%s%s%s%s"
+                , TimeUtil.toTimeString(TimeUtil.getTimestamp(), "yyyyMMddHHmmss")
+                , common.randomInt(10000000, 99999999)
+                , common.randomInt(10000000, 99999999)
+                , common.randomInt(10, 99)
+        );
 
         orderEntity.paymentTypeId = paymentType.index;
 
@@ -768,7 +791,7 @@ public class EvChargeHelper {
      *                     <p>
      *                     返回值说明：
      * @return true  表示父链尚未扣过安心充（可扣费）
-     *         false 表示父链中已存在已扣费的安心充订单（不要再扣）
+     * false 表示父链中已存在已扣费的安心充订单（不要再扣）
      * <p>
      * 其他说明：
      * - 最大遍历层数 MAX_HOPS = 5，用于防止异常循环或过深链路。
