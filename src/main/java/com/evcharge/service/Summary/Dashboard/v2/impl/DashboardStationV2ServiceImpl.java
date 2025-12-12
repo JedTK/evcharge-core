@@ -391,7 +391,7 @@ public class DashboardStationV2ServiceImpl implements DashboardStationV2Service 
             return common.apicb(0, "success", cache);
         }
 
-        long dayTime = TimeUtil.getTime00(-(days+1));
+        long dayTime = TimeUtil.getTime00(-days);
         System.out.println(dayTime);
         ISqlDBObject db = DataService.getDB().name("User");
 
@@ -443,7 +443,7 @@ public class DashboardStationV2ServiceImpl implements DashboardStationV2Service 
             return common.apicb(0, "success", cache);
         }
 
-        long dayTime = TimeUtil.getTime00(-(days+1));
+        long dayTime = TimeUtil.getTime00(-days);
         ISqlDBObject db = DataService.getDB().name("ChargeOrderView");
 
         db = new RegionQueryBuilder(request).applyTo(db);
