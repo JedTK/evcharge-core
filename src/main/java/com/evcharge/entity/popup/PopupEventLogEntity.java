@@ -45,7 +45,7 @@ public class PopupEventLogEntity extends BaseEntity implements Serializable {
      */
     public String client_code;
     /**
-     * 事件类型：DELIVER/IMPRESSION/CLICK_CONFIRM/CLOSE/CONSUMED/EXPIRE/CANCEL,;
+     * 事件类型：CREATE_MESSAGE/DELIVER/IMPRESSION/CLICK_CONFIRM/CLOSE/CONSUMED/EXPIRE/CANCEL,;
      */
     public String event_type;
     /**
