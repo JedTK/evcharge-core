@@ -760,7 +760,7 @@ public class EvChargeHelper {
          *  订阅（平台-->推送-->中转站）：{应用通道}/{设备编号}/command/业务逻辑函数名
          *  推送（中转站-->推送-->平台）：{平台代码}/{应用通道}/{设备编号}/业务逻辑函数名
          */
-        XMQTTFactory.getInstance().publish(String.format("%s/%s/command/startCharge", deviceEntity.appChannelCode, deviceEntity.deviceCode), json, 1);
+        XMQTTFactory.getInstance().publish(String.format("%s/%s/command/startCharge", deviceEntity.appChannelCode, deviceEntity.deviceCode), json, 0);
 
         //endregion
 
