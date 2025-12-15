@@ -82,8 +82,8 @@ public class DeviceService {
                     // 除了 AP262-L-4G / AP262-BL 之外的设备，同步 CSId 为主机的 CSId
                     if (!StringUtil.isEmpty(hostDeviceEntity.CSId)
                             && !"0".equalsIgnoreCase(hostDeviceEntity.CSId)
-//                            && !"AP262-L-4G".equals(deviceEntity.spuCode)
-//                            && !"AP262-BL".equals(deviceEntity.spuCode)
+                            && !"AP262-L-4G".equals(deviceEntity.spuCode)
+                            && !"AP262-BL".equals(deviceEntity.spuCode)
                     ) {
                         // 只有当 CSId 真正不一致时才更新
                         if (deviceEntity.CSId == null || !hostDeviceEntity.CSId.equalsIgnoreCase(deviceEntity.CSId)) {

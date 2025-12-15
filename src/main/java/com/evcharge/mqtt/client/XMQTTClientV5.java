@@ -272,7 +272,7 @@ public class XMQTTClientV5 implements IXMQTTClient {
                                 , "NOTIFY.TEXT"
                                 , ENotifyType.WECHATCORPBOT
                                 , new JSONObject() {{
-                                    put("title", "MQTT重连成功");
+                                    put("title", "MQTT连接成功");
                                     put("content", String.format("ClientId=%s,UserName=%s", ClientId, UserName));
                                 }}
                         );
