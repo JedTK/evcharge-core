@@ -6,12 +6,12 @@ import java.io.Serializable;
 import java.math.BigDecimal;
 
 /**
- * 订单退款申请;
+ * 订单退款申请明细;
  *
  * @author : Jay
  * @date : 2025-12-16
  */
-public class ConsumeOrderRefundApplyEntity extends BaseEntity implements Serializable {
+public class ConsumeOrderRefundApplyDetailEntity extends BaseEntity implements Serializable {
     //region -- 实体类属性 --
     /**
      * 申请id,;
@@ -22,37 +22,21 @@ public class ConsumeOrderRefundApplyEntity extends BaseEntity implements Seriali
      */
     public long uid;
     /**
-     * 申请编号,;
+     * 申请编号,用于关联ConsumeOrderRefundApply,;
      */
     public String apply_sn;
     /**
-     * 产品类型 关联EvcProductsType表 用于支付回调使用策略模式,;
+     * 消费订单号 关联消费订单表,;
      */
-    public String product_type;
+    public String consume_order_sn;
     /**
-     * 订单号 可以有多个订单 需要用in查询,;
+     * 订单金额,;
      */
-    public String order_sn;
+    public String order_amount;
     /**
      * 退款金额,;
      */
     public BigDecimal refund_amount;
-    /**
-     * 申请退款金额,;
-     */
-    public BigDecimal apply_refund_amount;
-    /**
-     * 退款理由,;
-     */
-    public String refund_reason;
-    /**
-     * 退款描述,;
-     */
-    public String refund_description;
-    /**
-     * 退款时间,;
-     */
-    public long refund_time;
     /**
      * 申请状态 1=申请中 2=已处理,;
      */
@@ -69,7 +53,7 @@ public class ConsumeOrderRefundApplyEntity extends BaseEntity implements Seriali
     /**
      * 获得一个实例
      */
-    public static ConsumeOrderRefundApplyEntity getInstance() {
-        return new ConsumeOrderRefundApplyEntity();
+    public static ConsumeOrderRefundApplyDetailEntity getInstance() {
+        return new ConsumeOrderRefundApplyDetailEntity();
     }
 }
