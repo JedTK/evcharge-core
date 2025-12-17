@@ -1,6 +1,7 @@
 package com.evcharge.entity.popup;
 
 
+import com.xyzs.annotation.TargetDB;
 import com.xyzs.entity.BaseEntity;
 
 import java.io.Serializable;
@@ -10,6 +11,7 @@ import java.io.Serializable;
  *
  * @date : 2025-12-12
  */
+@TargetDB("evcharge_notify")
 public class PopupConfigEntity extends BaseEntity implements Serializable {
     //region -- 实体类属性 --
     /**
@@ -31,7 +33,7 @@ public class PopupConfigEntity extends BaseEntity implements Serializable {
     /**
      * 状态：0=停用，1=启用,;
      */
-    public byte status;
+    public int status;
     /**
      * 关联内容模板 PopupTemplate 的编码,;
      */
@@ -67,11 +69,11 @@ public class PopupConfigEntity extends BaseEntity implements Serializable {
     /**
      * 是否允许与其他弹窗串行展示：0=只弹本条，1=可与其他一起排队,;
      */
-    public byte allow_multi_chain;
+    public int allow_multi_chain;
     /**
      * 是否强制弹窗：0=否，1=是（不处理不能继续下一步）,;
      */
-    public byte is_force;
+    public int is_force;
     /**
      * 扩展配置JSON，预留字段，如业务定向条件、灰度规则等,;
      */
@@ -100,5 +102,4 @@ public class PopupConfigEntity extends BaseEntity implements Serializable {
     public static PopupConfigEntity getInstance() {
         return new PopupConfigEntity();
     }
-
 }

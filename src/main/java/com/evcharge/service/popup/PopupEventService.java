@@ -4,6 +4,7 @@ import com.alibaba.fastjson2.JSONObject;
 import com.evcharge.entity.popup.PopupConfigEntity;
 import com.evcharge.entity.popup.PopupEventLogEntity;
 import com.xyzs.utils.LogsUtil;
+import com.xyzs.utils.StringUtil;
 import com.xyzs.utils.TimeUtil;
 import com.xyzs.utils.common;
 
@@ -48,10 +49,14 @@ public class PopupEventService {
             , String scene_code
             , String client_code
             , JSONObject ext_data) {
-        PopupConfigEntity cfg = PopupConfigService.getInstance().getByCode(popup_code);
-        if (cfg == null) {
-            LogsUtil.warn(TAG, String.format("无法查询%s弹窗配置", popup_code));
-            return;
+        if (StringUtil.isEmpty(scene_code)) {
+            PopupConfigEntity cfg = PopupConfigService.getInstance().getByCode(popup_code);
+            if (cfg == null) {
+                LogsUtil.warn(TAG, String.format("无法查询%s弹窗配置", popup_code));
+                return;
+            }
+            scene_code = cfg.scene_code;
+            if (StringUtil.isEmpty(client_code)) client_code = cfg.client_code;
         }
 
         PopupEventLogEntity entity = new PopupEventLogEntity();
@@ -64,7 +69,7 @@ public class PopupEventService {
         entity.client_code = client_code;
         entity.event_type = event_type;
         entity.event_day = TimeUtil.getTimeString("yyyy-MM-dd");
-        entity.ext_json = ext_data.toJSONString();
+        entity.ext_json = ext_data == null ? "{}" : ext_data.toJSONString();
         entity.create_time = TimeUtil.getTimestamp();
         entity.insert();
     }

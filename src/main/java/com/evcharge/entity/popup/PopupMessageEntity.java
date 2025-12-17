@@ -1,5 +1,6 @@
 package com.evcharge.entity.popup;
 
+import com.xyzs.annotation.TargetDB;
 import com.xyzs.entity.BaseEntity;
 
 import java.io.Serializable;
@@ -9,6 +10,7 @@ import java.io.Serializable;
  *
  * @date : 2025-12-12
  */
+@TargetDB("evcharge_notify")
 public class PopupMessageEntity extends BaseEntity implements Serializable {
     //region -- 实体类属性 --
     /**

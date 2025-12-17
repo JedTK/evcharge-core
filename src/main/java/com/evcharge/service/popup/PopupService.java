@@ -173,7 +173,6 @@ public class PopupService {
         // - end_time<=0 表示不过期
         // - 如果你希望“消息独立过期”，可以改成 min(cfg.end_time, now+ttl) 或者完全独立配置
         msg.expire_time = (cfg.end_time > 0 ? cfg.end_time : 0);
-
         msg.create_time = nowTime;
         msg.update_time = nowTime;
 
