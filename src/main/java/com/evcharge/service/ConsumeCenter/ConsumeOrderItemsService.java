@@ -45,6 +45,18 @@ public class ConsumeOrderItemsService {
     }
 
 
+    /**
+     * 根据
+     * @param orderSn 订单id
+     * @return
+     */
+    public ConsumeOrderItemsEntity getItemsByOrderSn(String orderSn){
+        return ConsumeOrderItemsEntity.getInstance()
+                .where("order_sn",orderSn)
+                .order("create_time desc")
+                .limit(1)
+                .findEntity();
+    }
 
 
 

@@ -54,7 +54,7 @@ public class ConsumeOrderRefundApplyEntity extends BaseEntity implements Seriali
      */
     public long refund_time;
     /**
-     * 申请状态 1=申请中 2=已处理,;
+     * 申请状态 1=申请中 2=已处理, 3=用户取消 4=后台管理员取消;
      */
     public int refund_status;
     /**
