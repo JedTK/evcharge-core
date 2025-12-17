@@ -4,7 +4,6 @@ import com.alibaba.fastjson2.JSONObject;
 import com.xyzs.entity.IAsyncListener;
 import com.xyzs.entity.SyncResult;
 import lombok.NonNull;
-import org.eclipse.paho.client.mqttv3.*;
 
 /**
  * MQTT接口规范
@@ -12,9 +11,14 @@ import org.eclipse.paho.client.mqttv3.*;
 public interface IXMQTTClient {
 
     /**
+     * 设置初始化服务，使用此设置，可以在MQTT断开时自定义重新连接，而不需要理会MQTT5本身的自动重连机制
+     */
+//    void setInitService(IAsyncListener iAsyncListener);
+
+    /**
      * 设置系统标签，用于方便查看日志
      */
-    IXMQTTClient setSysTAG(String SysTAG);
+    IXMQTTClient setTAG(String SysTAG);
 
     /**
      * （可选）设置平台变量（可用于区分平台订阅或推送）

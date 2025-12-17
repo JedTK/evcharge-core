@@ -61,7 +61,7 @@ public class XMQTTClientV3_Eclipse implements IXMQTTClient {
      * 设置系统标签，用于方便查看日志
      */
     @Override
-    public IXMQTTClient setSysTAG(String SysTAG) {
+    public IXMQTTClient setTAG(String SysTAG) {
         this.SysTAG = SysTAG;
         return this;
     }
@@ -97,6 +97,11 @@ public class XMQTTClientV3_Eclipse implements IXMQTTClient {
         this.EnvParams.put(key, value);
         return this;
     }
+
+//    @Override
+//    public void init(IAsyncListener iPubConnectSuccessListener,IAsyncListener iSubConnectSuccessListener) {
+//
+//    }
 
     /**
      * 推送简单连接

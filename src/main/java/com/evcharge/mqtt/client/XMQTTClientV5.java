@@ -2,21 +2,17 @@ package com.evcharge.mqtt.client;
 
 import com.alibaba.fastjson2.JSONObject;
 import com.alibaba.fastjson2.JSONWriter;
+import com.evcharge.enumdata.ECacheTime;
 import com.evcharge.enumdata.ENotifyType;
 import com.evcharge.mqtt.*;
-import com.evcharge.service.GeneralDevice.GeneralDeviceService;
 import com.evcharge.service.notify.NotifyService;
 import com.hivemq.client.mqtt.MqttClient;
 import com.hivemq.client.mqtt.datatypes.MqttQos;
 import com.hivemq.client.mqtt.datatypes.MqttTopicFilter;
-import com.hivemq.client.mqtt.lifecycle.MqttClientAutoReconnect;
 import com.hivemq.client.mqtt.mqtt5.Mqtt5AsyncClient;
 import com.xyzs.entity.IAsyncListener;
 import com.xyzs.entity.SyncResult;
-import com.xyzs.utils.LogsUtil;
-import com.xyzs.utils.StringUtil;
-import com.xyzs.utils.ThreadUtil;
-import com.xyzs.utils.TimeUtil;
+import com.xyzs.utils.*;
 import lombok.NonNull;
 
 import java.lang.reflect.Method;
@@ -67,7 +63,7 @@ public class XMQTTClientV5 implements IXMQTTClient {
     /**
      * 自动重连策略配置：初始重连间隔
      */
-    private long initialDelayMs = 1000;
+    private long initialDelayMs = 2000;
     /**
      * 自动重连策略配置：最大重连间隔
      */
@@ -77,7 +73,7 @@ public class XMQTTClientV5 implements IXMQTTClient {
      * 设置系统标签，用于方便查看日志
      */
     @Override
-    public IXMQTTClient setSysTAG(String SysTAG) {
+    public IXMQTTClient setTAG(String SysTAG) {
         this.TAG = SysTAG;
         return this;
     }
@@ -151,56 +147,73 @@ public class XMQTTClientV5 implements IXMQTTClient {
             URI uri = new URI(brokerServer);
             String host = uri.getHost();   // 获取主机地址
             int port = uri.getPort();      // 获取端口号
+            byte[] pwd = Password == null ? new byte[0] : Password.getBytes(StandardCharsets.UTF_8);
 
             // 创建异步 MQTT 5 客户端
             mPubClient = MqttClient.builder().useMqttVersion5()                 // 使用 MQTT 5 协议
                     .identifier(ClientId)              // 客户端唯一标识（ClientId）
                     .serverHost(host)                  // 设置服务器地址
                     .serverPort(port)                  // 设置服务器端口
-                    .automaticReconnect(               // 自动重连策略配置：指数退避（失败一次延迟翻倍）初始重连间隔1s，直到最大1m重连间隔
-                            MqttClientAutoReconnect.builder().initialDelay(this.initialDelayMs, TimeUnit.MILLISECONDS)   // 初始重连间隔：10秒
-                                    .maxDelay(this.maxDelayMs, TimeUnit.MILLISECONDS)       // 最大重连间隔：2分钟
-                                    .build())
+
+                    .simpleAuth()                      // 开启简单用户名/密码认证
+                    .username(UserName)                // 设置用户名
+                    .password(pwd)                     // 设置密码
+                    .applySimpleAuth()                 // 应用认证配置
+
+                    // 自动重连策略配置：指数退避（失败一次延迟翻倍）初始重连间隔1s，直到最大1m重连间隔
+                    .automaticReconnect()
+                    .initialDelay(this.initialDelayMs, TimeUnit.MILLISECONDS)   // 初始重连间隔：10秒
+                    .maxDelay(this.maxDelayMs, TimeUnit.MILLISECONDS)           // 最大重连间隔：2分钟
+                    .applyAutomaticReconnect()
+
+                    // 网络传输参数配置
+                    .transportConfig()
+                    .mqttConnectTimeout(10, TimeUnit.SECONDS)  // MQTT CONNECT 报文的超时时间
+                    .socketConnectTimeout(5, TimeUnit.SECONDS) // TCP 连接超时时间
+                    .applyTransportConfig()            // 应用网络传输配置
+
                     // 连接成功监听器
                     .addConnectedListener(ctx -> {
                         LogsUtil.info(TAG, "[推送] - ✅ 已连接，心跳 20s，监听自动重连");
-                        NotifyService.getInstance().asyncPush(ClientId
-                                , "NOTIFY.TEXT"
-                                , ENotifyType.WECHATCORPBOT
-                                , new JSONObject() {{
-                                    put("title", "MQTT重连成功");
-                                    put("content", String.format("ClientId=%s,UserName=%s", ClientId, UserName));
-                                }}
-                        );
+                        ExecutionThrottle.getInstance().run(data -> {
+                            NotifyService.getInstance().asyncPush(ClientId
+                                    , "NOTIFY.TEXT"
+                                    , ENotifyType.WECHATCORPBOT
+                                    , new JSONObject() {{
+                                        put("title", "MQTT连接成功");
+                                        put("content", String.format("ClientId=%s,UserName=%s", ClientId, UserName));
+                                    }}
+                            );
+                            return new SyncResult();
+                        }, String.format("MQTT.Connected:%s", ClientId), ECacheTime.MINUTE);
+
                     })
+
                     // 断开连接监听器
                     .addDisconnectedListener(ctx -> {
                         Throwable cause = ctx.getCause();
                         LogsUtil.error(TAG, "[推送] - ⚠️ 已断开 - %s - %s", ctx.getSource(), cause.getMessage());
-                        NotifyService.getInstance().asyncPush(ClientId
-                                , "NOTIFY.TEXT"
-                                , ENotifyType.WECHATCORPBOT
-                                , new JSONObject() {{
-                                    put("title", "MQTT已断开，尝试重连中...");
-                                    put("content", String.format("ClientId=%s,UserName=%s", ClientId, UserName));
-                                }}
-                        );
-                    }).transportConfig()                 // 网络传输参数配置
-                    .mqttConnectTimeout(10, TimeUnit.SECONDS)  // MQTT CONNECT 报文的超时时间
-                    .socketConnectTimeout(5, TimeUnit.SECONDS) // TCP 连接超时时间
-                    .applyTransportConfig()            // 应用网络传输配置
+
+                        ExecutionThrottle.getInstance().run(data -> {
+                            NotifyService.getInstance().asyncPush(ClientId
+                                    , "NOTIFY.TEXT"
+                                    , ENotifyType.WECHATCORPBOT
+                                    , new JSONObject() {{
+                                        put("title", "MQTT已断开，尝试重连中...");
+                                        put("content", String.format("ClientId=%s,UserName=%s", ClientId, UserName));
+                                    }}
+                            );
+                            return new SyncResult();
+                        }, String.format("MQTT.Disconnected:%s", ClientId), ECacheTime.MINUTE);
+                    })
+
                     .buildAsync();                     // 构建异步客户端
 
-            byte[] pwd = Password == null ? new byte[0] : Password.getBytes(StandardCharsets.UTF_8);
-
             // 启动连接流程
-            mPubClient.connectWith().cleanStart(true)      // 是否清除Session：true 表示不保留历史订阅和会话记录
-                    .keepAlive(20)         // 设置心跳间隔时间（秒）：客户端多久发一次 PING 请求，建议20~60秒
-                    .simpleAuth()          // 开启简单用户名/密码认证
-                    .username(UserName)    // 设置用户名
-                    .password(pwd)  // 设置密码
-                    .applySimpleAuth()     // 应用认证配置
-                    .send()                // 发送连接请求
+            mPubClient.connectWith()
+                    .cleanStart(true)       // 是否清除Session：true 表示不保留历史订阅和会话记录
+                    .keepAlive(30)          // 设置心跳间隔时间（秒）：客户端多久发一次 PING 请求，建议20~60秒
+                    .send()
                     .whenComplete((connAck, throwable) -> {
                         // 异步连接完成后回调
                         if (throwable != null) {
@@ -255,55 +268,69 @@ public class XMQTTClientV5 implements IXMQTTClient {
             URI uri = new URI(brokerServer);
             String host = uri.getHost();   // 获取主机地址
             int port = uri.getPort();      // 获取端口号
+            byte[] pwd = Password == null ? new byte[0] : Password.getBytes(StandardCharsets.UTF_8);
 
             // 创建异步 MQTT 5 客户端
             mSubClient = MqttClient.builder().useMqttVersion5()                 // 使用 MQTT 5 协议
                     .identifier(ClientId)              // 客户端唯一标识（ClientId）
                     .serverHost(host)                  // 设置服务器地址
                     .serverPort(port)                  // 设置服务器端口
-                    .automaticReconnect(               // 自动重连策略配置：指数退避（失败一次延迟翻倍）初始重连间隔1s，直到最大1m重连间隔
-                            MqttClientAutoReconnect.builder()
-                                    .initialDelay(this.initialDelayMs, TimeUnit.MILLISECONDS)   // 初始重连间隔：10秒
-                                    .maxDelay(this.maxDelayMs, TimeUnit.MILLISECONDS)       // 最大重连间隔：2分钟
-                                    .build())
+
+                    .simpleAuth()                      // 开启简单用户名/密码认证
+                    .username(UserName)                // 设置用户名
+                    .password(pwd)                     // 设置密码
+                    .applySimpleAuth()                 // 应用认证配置
+
+                    // 自动重连策略配置：指数退避（失败一次延迟翻倍）初始重连间隔1s，直到最大1m重连间隔
+                    .automaticReconnect()
+                    .initialDelay(this.initialDelayMs, TimeUnit.MILLISECONDS)   // 初始重连间隔：10秒
+                    .maxDelay(this.maxDelayMs, TimeUnit.MILLISECONDS)           // 最大重连间隔：2分钟
+                    .applyAutomaticReconnect()
+
+                    // 网络传输参数配置
+                    .transportConfig()
+                    .mqttConnectTimeout(10, TimeUnit.SECONDS)  // MQTT CONNECT 报文的超时时间
+                    .socketConnectTimeout(5, TimeUnit.SECONDS) // TCP 连接超时时间
+                    .applyTransportConfig()
+
                     .addConnectedListener(ctx -> {      // 连接成功监听器
                         LogsUtil.info(TAG, "[订阅] - ✅ 已连接，心跳 20s，监听自动重连");
-                        NotifyService.getInstance().asyncPush(ClientId
-                                , "NOTIFY.TEXT"
-                                , ENotifyType.WECHATCORPBOT
-                                , new JSONObject() {{
-                                    put("title", "MQTT连接成功");
-                                    put("content", String.format("ClientId=%s,UserName=%s", ClientId, UserName));
-                                }}
-                        );
+                        ExecutionThrottle.getInstance().run(data -> {
+                            NotifyService.getInstance().asyncPush(ClientId
+                                    , "NOTIFY.TEXT"
+                                    , ENotifyType.WECHATCORPBOT
+                                    , new JSONObject() {{
+                                        put("title", "MQTT连接成功");
+                                        put("content", String.format("ClientId=%s,UserName=%s", ClientId, UserName));
+                                    }}
+                            );
+                            return new SyncResult();
+                        }, String.format("MQTT.Connected:%s", ClientId), ECacheTime.MINUTE);
+
                     })
                     .addDisconnectedListener(ctx -> {
                         Throwable cause = ctx.getCause();
                         LogsUtil.error(TAG, "[订阅] - ⚠️ 已断开 - %s - %s", ctx.getSource(), cause.getMessage());
-                        NotifyService.getInstance().asyncPush(ClientId
-                                , "NOTIFY.TEXT"
-                                , ENotifyType.WECHATCORPBOT
-                                , new JSONObject() {{
-                                    put("title", "MQTT已断开，尝试重连中...");
-                                    put("content", String.format("ClientId=%s,UserName=%s", ClientId, UserName));
-                                }}
-                        );
-                    }).transportConfig()                 // 网络传输参数配置
-                    .mqttConnectTimeout(10, TimeUnit.SECONDS)  // MQTT CONNECT 报文的超时时间
-                    .socketConnectTimeout(5, TimeUnit.SECONDS) // TCP 连接超时时间
-                    .applyTransportConfig()            // 应用网络传输配置
+
+                        ExecutionThrottle.getInstance().run(data -> {
+                            NotifyService.getInstance().asyncPush(ClientId
+                                    , "NOTIFY.TEXT"
+                                    , ENotifyType.WECHATCORPBOT
+                                    , new JSONObject() {{
+                                        put("title", "MQTT已断开，尝试重连中...");
+                                        put("content", String.format("ClientId=%s,UserName=%s", ClientId, UserName));
+                                    }}
+                            );
+                            return new SyncResult();
+                        }, String.format("MQTT.Disconnected:%s", ClientId), ECacheTime.MINUTE);
+                    })
                     .buildAsync();                     // 构建异步客户端
 
-            byte[] pwd = Password == null ? new byte[0] : Password.getBytes(StandardCharsets.UTF_8);
-
             // 启动连接流程
-            mSubClient.connectWith().cleanStart(true)      // 是否清除Session：true 表示不保留历史订阅和会话记录
-                    .keepAlive(20)         // 设置心跳间隔时间（秒）：客户端多久发一次 PING 请求，建议20~60秒
-                    .simpleAuth()          // 开启简单用户名/密码认证
-                    .username(UserName)    // 设置用户名
-                    .password(pwd)  // 设置密码
-                    .applySimpleAuth()     // 应用认证配置
-                    .send()                // 发送连接请求
+            mSubClient.connectWith()
+                    .cleanStart(true)      // 是否清除Session：true 表示不保留历史订阅和会话记录
+                    .keepAlive(30)         // 设置心跳间隔时间（秒）：客户端多久发一次 PING 请求，建议20~60秒
+                    .send()
                     .whenComplete((connAck, throwable) -> {
                         // 异步连接完成后回调
                         if (throwable != null) {
@@ -573,6 +600,7 @@ public class XMQTTClientV5 implements IXMQTTClient {
             if (!mPubClient.getState().isConnected()) {
                 LogsUtil.warn(TAG, "[推送] - 客户端未连接，消息未发送");
                 if (iAsyncListener != null) iAsyncListener.onResult(2, "推送客户端未连接，消息未发送");
+//                reinitialize(); // 重新初始化
                 return;
             }
 
@@ -594,7 +622,6 @@ public class XMQTTClientV5 implements IXMQTTClient {
             if (iAsyncListener != null) iAsyncListener.onResult(3, "推送发送异常: " + e.getMessage());
         }
     }
-
 
     //endregion
 
@@ -638,6 +665,7 @@ public class XMQTTClientV5 implements IXMQTTClient {
             if (!mSubClient.getState().isConnected()) {
                 LogsUtil.warn(TAG, "[订阅] - 订阅客户端未连接，取消订阅");
                 if (iAsyncListener != null) iAsyncListener.onResult(4, "订阅客户端未连接，取消订阅");
+//                reinitialize(); // 重新初始化
                 return;
             }
 
