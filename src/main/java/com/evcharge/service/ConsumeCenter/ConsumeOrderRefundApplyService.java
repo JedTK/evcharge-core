@@ -1,6 +1,7 @@
 package com.evcharge.service.ConsumeCenter;
 
 import com.evcharge.entity.consumecenter.order.*;
+import com.evcharge.entity.consumecenter.order.vo.RefundAmountVo;
 import com.evcharge.entity.recharge.RechargeConfigEntity;
 import com.evcharge.entity.station.ChargeOrderEntity;
 import com.evcharge.entity.user.UserSummaryEntity;
@@ -39,36 +40,66 @@ public class ConsumeOrderRefundApplyService {
     @Autowired
     private UserSummaryService userSummaryService;
 
+
+    /**
+     * 获取最近7天申请退款记录
+     *
+     * @param uid uid
+     * @return
+     */
+    public List<ConsumeOrderRefundApplyEntity> getList(long uid) {
+        long last7DaysTimeStamp = TimeUtil.getAddDayTimestamp(-7);
+        return ConsumeOrderRefundApplyEntity.getInstance()
+                .where("uid", uid)
+                .where("create_time", ">=", last7DaysTimeStamp)
+                .selectList();
+    }
+
+
     public ConsumeOrderRefundApplyEntity getApplyInfoBySn(String applySn) {
         return ConsumeOrderRefundApplyEntity.getInstance()
                 .where("apply_sn", applySn)
                 .findEntity();
     }
 
+    public ConsumeOrderRefundApplyEntity getApplyInfoBySn(long uid, String applySn) {
+        return ConsumeOrderRefundApplyEntity.getInstance()
+                .where("apply_sn", applySn)
+                .where("uid", uid)
+                .findEntity();
+    }
+
+    public String createOrderSn() {
+        return String.format("APPLY%s%s", TimeUtil.toTimeString(TimeUtil.getTimestamp(), "yyyyMMddHHmmss"),
+                common.randomStr(4));
+
+    }
+
     /**
-     * 获取用户可退款金额（现金优先原则）
-     * 逻辑：如果余额 < 实付金额，则全退余额；如果余额 > 实付金额，则只退实付金额。
+     * 获取用户可退款余额
+     * @param uid 用户id
+     * @return RefundAmountVo
      */
-    public BigDecimal getRefundAmountByUid(long uid) {
-        // 1. 获取用户当前账户总余额
+    public RefundAmountVo getRefundAmountByUid(long uid) {
         BigDecimal currentBalance = UserSummaryEntity.getInstance().getBalanceWithUid(uid);
+        RefundAmountVo result = new RefundAmountVo();
+        result.deductBalance = currentBalance; // 申请退款则扣除全部余额
+        result.refundCashAmount = BigDecimal.ZERO;
+
         if (currentBalance.compareTo(BigDecimal.ZERO) <= 0) {
-            return BigDecimal.ZERO;
+            return result;
         }
 
-        BigDecimal totalRefundableCash = BigDecimal.ZERO;
-        BigDecimal remainingBalanceToTrace = currentBalance; // 待追溯的余额水位
-
+        BigDecimal remainingBalanceToTrace = currentBalance;
         int page = 1;
         long lastYearTimeStamp = TimeUtil.getAddDayTimestamp(-365);
 
-        // 只要还有剩余余额没找到来源，且还有订单，就继续追溯
         while (remainingBalanceToTrace.compareTo(BigDecimal.ZERO) > 0) {
             ConsumeOrdersEntity order = ConsumeOrdersEntity.getInstance()
                     .where("product_type", "recharge")
                     .where("uid", uid)
-                    .where("refund_status", 1)
-                    .where("payment_status", 2)
+                    .where("refund_status", 0) // 0=无退款
+                    .where("payment_status", 2) // 2=已支付
                     .order("pay_time desc")
                     .page(page)
                     .findEntity();
@@ -76,125 +107,120 @@ public class ConsumeOrderRefundApplyService {
             if (order == null) break;
             page++;
 
-            // 订单超过一年，虽然它贡献了余额，但不可退，直接扣减水位并跳过
             BigDecimal orderTotalContribution = order.pay_price.add(order.discount_price);
-            if (order.pay_time < lastYearTimeStamp) {
-                remainingBalanceToTrace = remainingBalanceToTrace.subtract(orderTotalContribution);
-                if (remainingBalanceToTrace.compareTo(BigDecimal.ZERO) < 0) remainingBalanceToTrace = BigDecimal.ZERO;
-                continue;
-            }
+            // 当前水位在该订单中所占的份额
+            BigDecimal effectiveInBalance = remainingBalanceToTrace.min(orderTotalContribution);
 
-            // 获取产品配置，校验是否包含赠送金额（reward_balance）
+            // 判定条件
+            boolean isExpired = order.pay_time < lastYearTimeStamp;
             ConsumeOrderItemsEntity item = consumeOrderItemsService.getItemsByOrderSn(order.order_sn);
-            if (item == null) continue;
+            RechargeConfigEntity config = (item != null) ? RechargeConfigEntity.getInstance().getInfoByProductId(item.product_id) : null;
+            boolean hasReward = (config != null && BigDecimal.valueOf(config.reward_balance).compareTo(BigDecimal.ZERO) > 0);
 
-            RechargeConfigEntity config = RechargeConfigEntity.getInstance().getInfoByProductId(item.product_id);
-            // 根据你的要求：含有赠送金额的订单（reward_balance > 0）整笔不接受退款
-            if (config == null || BigDecimal.valueOf(config.reward_balance).compareTo(BigDecimal.ZERO) > 0) {
-                remainingBalanceToTrace = remainingBalanceToTrace.subtract(orderTotalContribution);
-                if (remainingBalanceToTrace.compareTo(BigDecimal.ZERO) < 0) remainingBalanceToTrace = BigDecimal.ZERO;
-                continue;
+            if (!isExpired && !hasReward) {
+                // --- 核心逻辑变更：优先扣积分 ---
+                // 逻辑：可退现金 = Max(0, 当前订单份额 - 该订单的折扣金额)
+                // 但不能超过该订单的实付金额 (pay_price)
+
+                // 举例：订单充20(付18,折2)，消费3元，剩余17元。
+                // 17 - 0(因为该订单已消费，此时我们不关心整体，只关心这一笔的份额)
+                // 这里的算法需要换个思路：如果 份额 > 折扣，那么 现金部分 = 份额 - 折扣
+                if (effectiveInBalance.compareTo(order.discount_price) > 0) {
+                    // 剩余份额足以覆盖折扣，扣除折扣后剩下的全是现金
+                    BigDecimal cashInBalance = effectiveInBalance.subtract(order.discount_price);
+                    // 确保不超付（虽然逻辑上不可能，但加个min更稳）
+                    result.refundCashAmount = result.refundCashAmount.add(cashInBalance.min(order.pay_price));
+                } else {
+                    // 剩余份额还没折扣多，说明现金早就花光了，可退为0
+                    result.refundCashAmount = result.refundCashAmount.add(BigDecimal.ZERO);
+                }
             }
 
-            // --- 核心退款算法（现金优先） ---
-
-            // 1. 确定这笔订单在当前剩余余额水位中占了多少
-            // 比如余额剩 15，这笔订单贡献了 20，那么它在余额里的有效部分就是 15
-            BigDecimal effectiveAmountInBalance = remainingBalanceToTrace.min(orderTotalContribution);
-
-            // 2. 确定这笔订单能退的现金上限（实付金额）
-            BigDecimal maxCashCanRefund = order.pay_price;
-
-            // 3. 取两者的极小值
-            // 例子1：余额剩 15，实付 18 -> 退 15
-            // 例子2：余额剩 19，实付 18 -> 退 18
-            BigDecimal actualRefundFromThisOrder = effectiveAmountInBalance.min(maxCashCanRefund);
-
-            totalRefundableCash = totalRefundableCash.add(actualRefundFromThisOrder);
-
-            // 4. 水位下移，继续查下一笔
             remainingBalanceToTrace = remainingBalanceToTrace.subtract(orderTotalContribution);
-            if (remainingBalanceToTrace.compareTo(BigDecimal.ZERO) < 0) {
-                remainingBalanceToTrace = BigDecimal.ZERO;
-            }
+            if (remainingBalanceToTrace.compareTo(BigDecimal.ZERO) < 0) remainingBalanceToTrace = BigDecimal.ZERO;
         }
 
-        // 最终返回结果，保留两位小数并向下取整（防止微小精度差异）
-        return totalRefundableCash.setScale(2, RoundingMode.DOWN);
-    }
-
-    public String createOrderSn() {
-        return String.format("APPLY%s%s", TimeUtil.toTimeString(TimeUtil.getTimestamp(), "yyyyMMddHHmmss"),
-                common.randomStr(4));
+        result.refundCashAmount = result.refundCashAmount.setScale(2, RoundingMode.DOWN);
+        return result;
     }
 
     /**
      * 驳回申请
+     *
      * @param applySn 订单编号
-     * @param type 操作类型 用户自行取消还是系统后台取消 1=用户自行取消 2=系统取消
+     * @param type    操作类型 用户自行取消还是系统后台取消 1=用户自行取消 2=系统取消
      * @return SyncResult
      */
-    public SyncResult cancelRefundApply(String applySn,int type) {
+    public SyncResult cancelRefundApply(long uid, String applySn, int type) {
         // 1. 获取并校验主申请单
-        ConsumeOrderRefundApplyEntity apply = getApplyInfoBySn(applySn);
+        ConsumeOrderRefundApplyEntity apply = getApplyInfoBySn(uid, applySn);
         if (apply == null) return new SyncResult(1, "退款申请不存在");
         if (apply.refund_status == 2) return new SyncResult(0, "该申请已处理完成");
         if (apply.refund_status != 1) return new SyncResult(1, "申请单状态不支持处理");
-        Map<String,Object> data=new HashMap<>();
-        data.put("refund_status",type==1?3:4);
-        data.put("updated_time",TimeUtil.getTimestamp());
-        long res =ConsumeOrderRefundApplyEntity.getInstance().where("id", apply.id).update(data);
-        if(res==0) return new SyncResult(1,"取消失败");
-
+        Map<String, Object> data = new HashMap<>();
+        data.put("refund_status", type == 1 ? 3 : 4);
+        data.put("update_time", TimeUtil.getTimestamp());
+        long res = ConsumeOrderRefundApplyEntity.getInstance().where("id", apply.id).update(data);
+        if (res == 0) return new SyncResult(1, "取消失败");
 
         userSummaryService.updateBalance(
                 apply.uid,
-                apply.refund_amount.negate().doubleValue(),
+                apply.refund_amount.doubleValue(),
                 "apply_refund",
                 "申请退款取消: " + applySn,
                 applySn
         );
 
 
-        return new SyncResult(0,"success");
+        return new SyncResult(0, "success");
     }
 
-
     /**
-     * 申请退款：支持多笔订单自动拆分退款
+     * 退款申请
+     * @param uid 用户id
+     * @param refundAmount 退款金额
+     * @param reason 退款原因
+     * @param descriptionImage 图片描述
+     * @return SyncResult
      */
-    public SyncResult applyRefundForRecharge(long uid, BigDecimal refundAmount,String reason) {
+    public SyncResult applyRefundForRecharge(long uid, BigDecimal refundAmount, String reason, String descriptionImage) {
 
-        int chargeCount= ChargeOrderEntity.getInstance().where("uid", uid)
-                .where("status", 1)
-                .count();
-        if(chargeCount > 0) return new SyncResult(1,"还有充电中的订单没有结束，请结束充电订单后在申请退款");
-        // 1. 金额合法性校验
-        BigDecimal currentBalance = UserSummaryEntity.getInstance().getBalanceWithUid(uid);
+        // 0. 前置校验
+        int chargeCount = ChargeOrderEntity.getInstance().where("uid", uid).where("status", 1).count();
+        if (chargeCount > 0) return new SyncResult(1, "还有充电中的订单没有结束，请结束充电订单后再申请退款");
+
+        int count = ConsumeOrderRefundApplyEntity.getInstance().where("uid", uid).where("refund_status", 1).count();
+        if (count > 0) return new SyncResult(1, "退款申请处理中，请勿重复操作");
+
+        // 1. 获取上限计算结果
+        RefundAmountVo calc = getRefundAmountByUid(uid);
+        BigDecimal currentBalance = calc.deductBalance; // 总余额 (37.0)
+        BigDecimal maxCanRefund = calc.refundCashAmount; // 现金上限 (36.0)
+
+        // 2. 校验
         if (currentBalance.compareTo(refundAmount) < 0) {
             return new SyncResult(1, "余额不足，无法申请退款");
         }
-
-        // 预校验：调用刚才写的逻辑，判断这笔钱是否属于“可自助退款”的现金范畴
-        BigDecimal maxCanRefund = getRefundAmountByUid(uid);
         if (refundAmount.compareTo(maxCanRefund) > 0) {
-            return new SyncResult(1, "申请金额超过可退款现金上限（含不可退活动金额）");
+            return new SyncResult(1, "申请金额超过可退现金上限（系统已优先扣除您的积分/折扣额度）");
         }
 
         List<ConsumeOrderRefundApplyDetailEntity> orderList = new ArrayList<>();
-        BigDecimal remainingToRefund = refundAmount;
-        BigDecimal tracedTotalBalance = BigDecimal.ZERO; // 追溯水位线
+        BigDecimal remainingToRefund = refundAmount; // 用户申请的现金 (36.0)
+
+        // 【定义当前水位】：从用户总余额开始倒推
+        BigDecimal currentWaterLevel = currentBalance;
 
         String applySn = createOrderSn();
         long lastYearTimeStamp = TimeUtil.getAddDayTimestamp(-365);
         int page = 1;
 
-        // 2. 查找可退款订单并拆分金额（逻辑需同步 getRefundAmountByUid）
+        // 3. 查找可退款订单并拆分金额
         while (remainingToRefund.compareTo(BigDecimal.ZERO) > 0) {
             ConsumeOrdersEntity order = ConsumeOrdersEntity.getInstance()
                     .where("product_type", "recharge")
                     .where("uid", uid)
-                    .where("refund_status", 1) // 确保状态位统一
+                    .where("refund_status", 0)
                     .where("payment_status", 2)
                     .order("pay_time desc")
                     .page(page)
@@ -203,90 +229,78 @@ public class ConsumeOrderRefundApplyService {
             if (order == null) break;
             page++;
 
-            // 订单贡献的总额度（实付 + 积分抵扣）
-            BigDecimal orderContribution = order.pay_price.add(order.discount_price);
+            // --- 显式定义 orderTotalContribution ---
+            // 这一笔订单给余额池贡献的总水量 = 实付现金 + 积分抵扣/优惠金额
+            BigDecimal orderTotalContribution = order.pay_price.add(order.discount_price);
 
-            // A. 过滤：一年之前的订单
-            if (order.pay_time < lastYearTimeStamp) {
-                tracedTotalBalance = tracedTotalBalance.add(orderContribution);
-                continue;
-            }
-
-            // B. 过滤：检查配置（是否有赠送 reward_balance）
+            // 判定订单合规性
             ConsumeOrderItemsEntity item = consumeOrderItemsService.getItemsByOrderSn(order.order_sn);
             RechargeConfigEntity config = (item != null) ? RechargeConfigEntity.getInstance().getInfoByProductId(item.product_id) : null;
+            boolean isExpired = order.pay_time < lastYearTimeStamp;
+            boolean hasReward = (config != null && BigDecimal.valueOf(config.reward_balance).compareTo(BigDecimal.ZERO) > 0);
 
-            // 如果包含赠送，该订单贡献了余额水位，但不提供退款额度
-            if (config == null || BigDecimal.valueOf(config.reward_balance).compareTo(BigDecimal.ZERO) > 0) {
-                tracedTotalBalance = tracedTotalBalance.add(orderContribution);
-                continue;
+            if (!isExpired && !hasReward) {
+                // --- 核心：优先扣积分拆分逻辑 ---
+                // 只要当前余额水位还覆盖了这笔订单的一部分，就尝试从这部分里提现现金
+                // 能够从这笔订单拿走的现金上限 = Min(当前水位, 该订单实付现金)
+                BigDecimal cashAvailableInThisOrder = currentWaterLevel.min(order.pay_price);
+
+                if (cashAvailableInThisOrder.compareTo(BigDecimal.ZERO) > 0) {
+                    // 实际拿走金额 = Min(可退现金上限, 还没凑够的退款金额)
+                    BigDecimal actualRefund = cashAvailableInThisOrder.min(remainingToRefund);
+
+                    ConsumeOrderRefundApplyDetailEntity detail = new ConsumeOrderRefundApplyDetailEntity();
+                    detail.uid = uid;
+                    detail.apply_sn = applySn;
+                    detail.consume_order_sn = order.order_sn;
+                    detail.order_amount = order.pay_price;
+                    detail.refund_amount = actualRefund;
+                    detail.create_time = TimeUtil.getTimestamp();
+                    orderList.add(detail);
+
+                    remainingToRefund = remainingToRefund.subtract(actualRefund);
+                }
             }
 
-            // --- 核心计算逻辑：现金优先 ---
-
-            // 1. 计算这笔订单在当前余额水位中的有效“残余总额”
-            // RemainingInWallet = currentBalance - tracedTotalBalance
-            BigDecimal remainingInWallet = currentBalance.subtract(tracedTotalBalance);
-            if (remainingInWallet.compareTo(BigDecimal.ZERO) <= 0) {
-                break; // 之后的订单已经被消费光了
+            // 重要：水位不仅要扣除现金，还要扣除积分贡献的部分，因为它们都占了余额
+            currentWaterLevel = currentWaterLevel.subtract(orderTotalContribution);
+            if (currentWaterLevel.compareTo(BigDecimal.ZERO) < 0) {
+                currentWaterLevel = BigDecimal.ZERO;
             }
-
-            // 这笔订单实际在余额里的部分（不能超过订单总贡献，也不能超过当前水位残余）
-            BigDecimal effectiveAmountInBalance = remainingInWallet.min(orderContribution);
-
-            // 2. 计算这笔订单可退现金上限（不能超过实付，也不能超过它在余额里的残余）
-            BigDecimal maxCashFromThisOrder = effectiveAmountInBalance.min(order.pay_price);
-
-            if (maxCashFromThisOrder.compareTo(BigDecimal.ZERO) > 0) {
-                // 3. 确定最终从这笔订单退多少
-                BigDecimal actualRefund = maxCashFromThisOrder.min(remainingToRefund);
-
-                ConsumeOrderRefundApplyDetailEntity detail = new ConsumeOrderRefundApplyDetailEntity();
-                detail.uid = uid;
-                detail.apply_sn = applySn;
-                detail.consume_order_sn = order.order_sn;
-                detail.refund_amount = actualRefund;
-                detail.created_time = TimeUtil.getTimestamp();
-                orderList.add(detail);
-
-                remainingToRefund = remainingToRefund.subtract(actualRefund);
-            }
-
-            // 更新追溯水位，继续下一笔
-            tracedTotalBalance = tracedTotalBalance.add(orderContribution);
         }
 
-        // 3. 结果校验
+        // 4. 校验拆分结果
         if (remainingToRefund.compareTo(BigDecimal.ZERO) > 0) {
-            return new SyncResult(1, "拆分退款金额失败，部分资金可能已消费或不可退");
+            return new SyncResult(1, "拆分退款金额失败，现金部分已被消费");
         }
 
-        // 4. 持久化数据
+        // 5. 保存并扣款
         try {
-            boolean saved = saveToDatabase(uid, applySn, refundAmount,reason, orderList);
+            boolean saved = saveToDatabase(uid, applySn, refundAmount, reason, descriptionImage, orderList);
             if (!saved) return new SyncResult(1, "数据库写入失败");
         } catch (Exception e) {
             return new SyncResult(1, "保存异常: " + e.getMessage());
         }
 
-        // 5. 扣减/冻结用户余额
+        // 全额清空余额：扣除 currentBalance
         userSummaryService.updateBalance(
                 uid,
-                -refundAmount.negate().doubleValue(),
+                currentBalance.negate().doubleValue(),
                 "apply_refund",
-                "申请退款: " + applySn,
+                "申请退款清空余额: " + applySn,
                 applySn
         );
+
         return new SyncResult(0, "申请成功");
     }
 
-    /**
+     /**
      * 处理退款申请（回调/后台审核通过后调用）
      * 优化点：支持部分失败后的重试，确保幂等性
      */
-    public SyncResult handleRefundApply(String applySn) {
+    public SyncResult handleRefundApply(long uid,String applySn) {
         // 1. 获取并校验主申请单
-        ConsumeOrderRefundApplyEntity apply = getApplyInfoBySn(applySn);
+        ConsumeOrderRefundApplyEntity apply = getApplyInfoBySn(uid,applySn);
         if (apply == null) return new SyncResult(1, "退款申请不存在");
         if (apply.refund_status == 2) return new SyncResult(0, "该申请已处理完成");
         if (apply.refund_status != 1) return new SyncResult(1, "申请单状态不支持处理");
@@ -338,7 +352,7 @@ public class ConsumeOrderRefundApplyService {
 
                     // B. 更新原订单状态（2=已退款/部分退款）
                     Map<String, Object> orderUpdate = new LinkedHashMap<>();
-                    orderUpdate.put("refund_status", 2);
+                    orderUpdate.put("refund_status", 1);
                     orderUpdate.put("update_time", TimeUtil.getTimestamp());
                     ConsumeOrdersEntity.getInstance().where("id", originOrder.id).update(orderUpdate);
 
@@ -381,12 +395,13 @@ public class ConsumeOrderRefundApplyService {
     /**
      * 执行数据库持久化：保存退款申请主表和详情表
      * * @param uid          用户ID
+     *
      * @param applySn      申请单号
      * @param refundAmount 总退款金额
      * @param orderList    拆分后的订单详情列表
      * @return boolean 是否保存成功
      */
-    private boolean saveToDatabase(long uid, String applySn, BigDecimal refundAmount,String reason, List<ConsumeOrderRefundApplyDetailEntity> orderList) {
+    private boolean saveToDatabase(long uid, String applySn, BigDecimal refundAmount, String reason, String descriptionImage, List<ConsumeOrderRefundApplyDetailEntity> orderList) {
         // 1. 组装主表数据
         Map<String, Object> applyData = new HashMap<>();
         applyData.put("uid", uid);
@@ -395,8 +410,9 @@ public class ConsumeOrderRefundApplyService {
         applyData.put("refund_amount", refundAmount);          // 实际要退款的金额（现金）
         applyData.put("apply_refund_amount", refundAmount);    // 申请时的金额
         applyData.put("refund_reason", reason);
+        applyData.put("description_image", descriptionImage);
         applyData.put("refund_status", 1);                     // 1=待处理
-        applyData.put("created_time", TimeUtil.getTimestamp());
+        applyData.put("create_time", TimeUtil.getTimestamp());
 
         // 插入主表并获取主键 ID
         long mainId = ConsumeOrderRefundApplyEntity.getInstance().insertGetId(applyData);
@@ -411,8 +427,9 @@ public class ConsumeOrderRefundApplyService {
             detailMap.put("uid", uid);
             detailMap.put("apply_sn", applySn);
             detailMap.put("consume_order_sn", detail.consume_order_sn);
+            detailMap.put("order_amount", detail.order_amount);
             detailMap.put("refund_amount", detail.refund_amount);
-            detailMap.put("created_time", TimeUtil.getTimestamp());
+            detailMap.put("create_time", TimeUtil.getTimestamp());
             detailMap.put("refund_status", 1); // 1=待处理
 
             long detailId = ConsumeOrderRefundApplyDetailEntity.getInstance().insertGetId(detailMap);

@@ -1,6 +1,7 @@
 package com.evcharge.entity.consumecenter.order;
 
 
+import com.xyzs.annotation.TargetDB;
 import com.xyzs.entity.BaseEntity;
 import java.io.Serializable;
 import java.math.BigDecimal;
@@ -11,6 +12,7 @@ import java.math.BigDecimal;
  * @author : Jay
  * @date : 2025-12-16
  */
+@TargetDB("evcharge_consumecenter")
 public class ConsumeOrderRefundApplyEntity extends BaseEntity implements Serializable {
     //region -- 实体类属性 --
     /**
@@ -50,6 +52,10 @@ public class ConsumeOrderRefundApplyEntity extends BaseEntity implements Seriali
      */
     public String refund_description;
     /**
+     * 图片描述,;
+     */
+    public String description_image;
+    /**
      * 退款时间,;
      */
     public long refund_time;
@@ -60,11 +66,11 @@ public class ConsumeOrderRefundApplyEntity extends BaseEntity implements Seriali
     /**
      * 创建时间,;
      */
-    public long created_time;
+    public long create_time;
     /**
      * 更新时间,;
      */
-    public long updated_time;
+    public long update_time;
     //endregion
     /**
      * 获得一个实例
