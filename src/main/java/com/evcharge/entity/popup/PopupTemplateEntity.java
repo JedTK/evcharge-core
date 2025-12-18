@@ -39,6 +39,10 @@ public class PopupTemplateEntity extends BaseEntity implements Serializable {
      */
     public String content;
     /**
+     * 图片路径
+     */
+    public String image_url;
+    /**
      * 确认按钮 JSON 模板配置，支持 ${var}，为空表示无确认按钮,;
      */
     public String button_confirm_json;
@@ -53,7 +57,7 @@ public class PopupTemplateEntity extends BaseEntity implements Serializable {
     /**
      * 状态：0-停用，1-启用,;
      */
-    public byte status;
+    public int status;
     /**
      * 备注,;
      */

@@ -47,21 +47,13 @@ public class PopupEventLogEntity extends BaseEntity implements Serializable {
      */
     public String client_code;
     /**
-     * 事件类型：CREATE_MESSAGE/DELIVER/IMPRESSION/CLICK_CONFIRM/CLOSE/CONSUMED/EXPIRE/CANCEL,;
+     * 事件类型：DELIVER/IMPRESSION/CLICK_CONFIRM/CLOSE/CONSUMED/EXPIRE/CANCEL,;
      */
     public String event_type;
     /**
      * 事件日期(yyyyMMdd)，用于索引/分区,;
      */
     public String event_day;
-    /**
-     * 结果码（0=成功，其他=失败/拒绝/异常）,;
-     */
-    public int result_code;
-    /**
-     * 结果说明,;
-     */
-    public String result_msg;
     /**
      * 扩展JSON（渠道、灰度、版本号、城市、AB实验、队列信息等）,;
      */
@@ -78,5 +70,4 @@ public class PopupEventLogEntity extends BaseEntity implements Serializable {
     public static PopupEventLogEntity getInstance() {
         return new PopupEventLogEntity();
     }
-
 }

@@ -15,7 +15,7 @@ import java.io.Serializable;
 public class PopupConfigEntity extends BaseEntity implements Serializable {
     //region -- 实体类属性 --
     /**
-     * ;
+     * ID;
      */
     public long id;
     /**

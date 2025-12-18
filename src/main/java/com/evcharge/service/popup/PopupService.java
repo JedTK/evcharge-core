@@ -3,12 +3,12 @@ package com.evcharge.service.popup;
 import com.alibaba.fastjson2.JSONObject;
 import com.evcharge.entity.popup.PopupConfigEntity;
 import com.evcharge.entity.popup.PopupMessageEntity;
+import com.evcharge.entity.popup.PopupTemplateEntity;
 import com.xyzs.entity.ISyncResult;
 import com.xyzs.entity.SyncResult;
-import com.xyzs.utils.LogsUtil;
-import com.xyzs.utils.StringUtil;
-import com.xyzs.utils.TimeUtil;
-import com.xyzs.utils.common;
+import com.xyzs.text.template.MissingPolicy;
+import com.xyzs.text.template.StringTemplateEngine;
+import com.xyzs.utils.*;
 
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -232,7 +232,7 @@ public class PopupService {
         // 说明：先只取 status=0，避免重复下发；若要支持“下发失败重试”，可引入 retry_count 或回滚机制
         List<PopupMessageEntity> userPending = PopupMessageEntity.getInstance()
                 .where("uid", uid)
-                .where("status", 0)
+                .whereIn("status", "0,1")
                 .selectList();
 
         // 2) 查全局待处理消息（uid=0）
@@ -303,32 +303,35 @@ public class PopupService {
 
         for (PopupMessageEntity m : candidates) {
             PopupConfigEntity cfg = PopupConfigService.getInstance().getByCode(m.popup_code);
-
             // 配置不存在或未启用，跳过
             if (cfg == null || cfg.status != 1) continue;
+
+            PopupTemplateEntity templateEntity = PopupTemplateService.getInstance().getByCode(m.popup_code);
+            if (templateEntity == null || templateEntity.status != 1) continue;
 
             // 配置有效期校验：配置被下线/过期就不弹
             if (!isConfigActive(cfg, now)) continue;
 
+            if (StringUtil.isEmpty(m.vars_json)) m.vars_json = "{}";
+            JSONObject vars = JSONObject.parseObject(m.vars_json);
+            if (vars == null) vars = new JSONObject();
+
             // 组装返回给前端的 item
             Map<String, Object> item = new LinkedHashMap<>();
             item.put("message_id", m.message_id);
-            item.put("popup_code", m.popup_code);
-            item.put("popup_name", cfg.popup_name);
-            item.put("popup_type", cfg.popup_type);
-            item.put("template_code", cfg.template_code);
-            item.put("priority", cfg.priority);
-            item.put("is_force", cfg.is_force);
-            item.put("allow_multi_chain", cfg.allow_multi_chain);
+            item.put("title", StringTemplateEngine.render(templateEntity.title, vars, MissingPolicy.EMPTY_STRING));
+            item.put("sub_title", StringTemplateEngine.render(templateEntity.sub_title, vars, MissingPolicy.EMPTY_STRING));
+            item.put("content", StringTemplateEngine.render(templateEntity.content, vars, MissingPolicy.EMPTY_STRING));
+            item.put("image_url", StringTemplateEngine.render(templateEntity.image_url, vars, MissingPolicy.EMPTY_STRING));
 
-            // vars：动态变量（用于模板渲染/跳转参数）
-            try {
-                item.put("vars", JSONObject.parseObject(m.vars_json));
-            } catch (Exception e) {
-                // vars_json 解析失败时给空对象，避免前端崩溃
-                item.put("vars", new JSONObject());
-            }
+            // 组建按钮数据
+            String button_confirm_json_str = StringTemplateEngine.render(templateEntity.button_confirm_json, vars, MissingPolicy.EMPTY_STRING);
+            JSONObject button_confirm_json = JsonUtil.toJSON(button_confirm_json_str);
+            String button_close_json_str = StringTemplateEngine.render(templateEntity.button_close_json, vars, MissingPolicy.EMPTY_STRING);
+            JSONObject button_close_json = JsonUtil.toJSON(button_close_json_str);
 
+            item.put("button_confirm_json", button_confirm_json);
+            item.put("button_close_json", button_close_json);
             popups.add(item);
 
             // 7) 更新消息状态为已下发 + 记录 DELIVER 事件
@@ -450,76 +453,85 @@ public class PopupService {
      * @param uid        用户 id
      * @param message_id 消息 id
      */
-    public ISyncResult event_click(long uid, String message_id) {
+    public ISyncResult event_click(long uid, String message_id, String button_code) {
         if (uid <= 0) return new SyncResult(99, "请先登录");
         if (StringUtil.isEmpty(message_id)) return new SyncResult(0, "message_id不能为空");
+        if (StringUtil.isEmpty(button_code)) return new SyncResult(0, "button_code不能为空");
 
         long now = TimeUtil.getTimestamp();
 
-        // 1) 查询消息
-        // 说明：message_id 应该是唯一的，建议数据库加 UNIQUE(message_id)
         List<PopupMessageEntity> list = PopupMessageEntity.getInstance()
                 .where("message_id", message_id)
                 .selectList();
-        if (list == null || list.isEmpty()) {
-            return new SyncResult(3, "弹窗消息不存在");
-        }
+        if (list == null || list.isEmpty()) return new SyncResult(3, "弹窗消息不存在");
 
         PopupMessageEntity msg = list.get(0);
-
-        // 2) 归属校验（防止越权）
         if (msg.uid != uid) return new SyncResult(98, "无权限操作该弹窗消息");
 
-        // 3) 过期校验
         if (isExpired(msg, now)) {
             markExpired(msg, now);
             return new SyncResult(4, "弹窗消息已过期");
         }
 
-        // 4) 状态幂等与非法状态处理
-        if (msg.status == 2) {
-            // 已消费：幂等返回成功
-            return new SyncResult(0, "");
-        }
-        if (msg.status == 3) {
-            return new SyncResult(5, "弹窗消息已取消");
-        }
-        if (msg.status == 4) {
-            return new SyncResult(4, "弹窗消息已过期");
+        // 反查按钮定义（推荐走快照；这里演示走当前模板）
+        PopupConfigEntity cfg = PopupConfigService.getInstance().getByCode(msg.popup_code);
+        if (cfg == null) return new SyncResult(3, "弹窗配置不存在");
+
+        // 你这里目前用 getByCode(m.popup_code) 拿模板，其实更合理的是 cfg.template_code
+        PopupTemplateEntity tpl = PopupTemplateService.getInstance().getByCode(cfg.template_code);
+        if (tpl == null) return new SyncResult(3, "弹窗模板不存在");
+
+        JSONObject vars = JSONObject.parseObject(StringUtil.isEmpty(msg.vars_json) ? "{}" : msg.vars_json);
+        if (vars == null) vars = new JSONObject();
+
+        JSONObject btnConfirm = JsonUtil.toJSON(StringTemplateEngine.render(tpl.button_confirm_json, vars, MissingPolicy.EMPTY_STRING));
+        JSONObject btnClose = JsonUtil.toJSON(StringTemplateEngine.render(tpl.button_close_json, vars, MissingPolicy.EMPTY_STRING));
+
+        JSONObject btn = null;
+        if (btnConfirm != null && button_code.equals(btnConfirm.getString("button_code"))) btn = btnConfirm;
+        if (btnClose != null && button_code.equals(btnClose.getString("button_code"))) btn = btnClose;
+
+        if (btn == null) {
+            // 防御：前端传了未知按钮编码
+            PopupEventService.getInstance().add(uid, msg.message_id, msg.popup_code,
+                    "CLICK_UNKNOWN", msg.biz_key, msg.scene_code, msg.client_code,
+                    new JSONObject().fluentPut("button_code", button_code));
+            return new SyncResult(6, "未知按钮");
         }
 
-        // 5) 更新为已消费
-        try {
+        String action = btn.getString("action");
+        String consumePolicy = btn.getString("consume_policy"); // CONSUME / KEEP / CANCEL
+
+        // 根据 consume_policy 决定消息状态
+        if ("CONSUME".equalsIgnoreCase(consumePolicy)) {
+            if (msg.status != 2) {
+                msg.where("message_id", message_id).update(new LinkedHashMap<>() {{
+                    put("status", 2);
+                    put("update_time", now);
+                }});
+            }
+        } else if ("CANCEL".equalsIgnoreCase(consumePolicy)) {
             msg.where("message_id", message_id).update(new LinkedHashMap<>() {{
-                put("status", 2);
+                put("status", 3);
                 put("update_time", now);
             }});
-        } catch (Exception e) {
-            LogsUtil.error(TAG, "更新弹窗消息状态失败: " + e.getMessage());
-            return new SyncResult(1, "操作失败");
+        } else {
+            // KEEP：不改状态（或者只更新时间）
+            msg.where("message_id", message_id).update(new LinkedHashMap<>() {{
+                put("update_time", now);
+            }});
         }
 
-        // 6) 记录点击事件
-        // 说明：事件写失败不影响主流程，但一定要打日志，方便追查“有消费无日志”的异常
-        try {
-            PopupEventService.getInstance().add(
-                    uid,
-                    msg.message_id,
-                    msg.popup_code,
-                    "CLICK_CONFIRM",
-                    msg.biz_key,
-                    msg.scene_code,
-                    msg.client_code,
-                    null
-            );
-        } catch (Exception e) {
-            LogsUtil.warn(TAG, "记录CLICK_CONFIRM事件失败: " + e.getMessage());
-        }
+        // 写事件：带上 button_code/action（后续分析就有了）
+        JSONObject ext = new JSONObject();
+        ext.put("button_code", button_code);
+        ext.put("action", action);
+        ext.put("consume_policy", consumePolicy);
 
-        Map<String, Object> data = new LinkedHashMap<>();
-        data.put("message_id", msg.message_id);
-        data.put("popup_code", msg.popup_code);
-        return new SyncResult(0, "", data);
+        PopupEventService.getInstance().add(uid, msg.message_id, msg.popup_code,
+                "CLICK", msg.biz_key, msg.scene_code, msg.client_code, ext);
+
+        return new SyncResult(0, "");
     }
 
     // region remark - 辅助函数
@@ -598,9 +610,6 @@ public class PopupService {
      * @return 是否命中
      */
     private boolean matchList(String raw, String value) {
-        if (StringUtil.isEmpty(raw)) return true; // 为空视为不限制
-        if (StringUtil.isEmpty(value)) return false;
-
         String s = raw.trim();
         if ("*".equals(s) || "ALL".equalsIgnoreCase(s)) return true;
 

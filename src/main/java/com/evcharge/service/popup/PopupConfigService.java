@@ -43,9 +43,9 @@ public class PopupConfigService {
      * @return 弹窗配置
      */
     public PopupConfigEntity getByCode(String popup_code, boolean inCache) {
-        PopupConfigEntity configEntity = PopupConfigEntity.getInstance();
-        if (inCache) configEntity.cache(String.format("BaseData:PopupConfig:%s", popup_code));
-        return configEntity.where("popup_code", popup_code)
+        PopupConfigEntity entity = PopupConfigEntity.getInstance();
+        if (inCache) entity.cache(String.format("BaseData:PopupConfig:%s", popup_code));
+        return entity.where("popup_code", popup_code)
                 .findEntity();
     }
 }

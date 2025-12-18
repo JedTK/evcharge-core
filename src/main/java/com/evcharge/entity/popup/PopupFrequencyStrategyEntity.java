@@ -37,15 +37,15 @@ public class PopupFrequencyStrategyEntity extends BaseEntity implements Serializ
     /**
      * 是否用户看过一次(曝光一次)后不再弹：0=否，1=是,;
      */
-    public byte user_seen_no_more;
+    public int user_seen_no_more;
     /**
      * 是否用户点击主按钮后不再弹：0=否，1=是,;
      */
-    public byte user_clicked_no_more;
+    public int user_clicked_no_more;
     /**
      * 是否用户关闭一次后不再弹：0=否，1=是,;
      */
-    public byte user_closed_no_more;
+    public int user_closed_no_more;
     /**
      * 全局每日最多展示次数，0表示不限制,;
      */
@@ -53,7 +53,7 @@ public class PopupFrequencyStrategyEntity extends BaseEntity implements Serializ
     /**
      * 是否在指定场景必弹一次：0=否，1=是,;
      */
-    public byte force_in_scene;
+    public int force_in_scene;
     /**
      * 扩展JSON，例如按渠道、城市维度做细化频控等,;
      */

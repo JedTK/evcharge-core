@@ -40,7 +40,7 @@ public class PopupMessageEntity extends BaseEntity implements Serializable {
     /**
      * 状态：任务状态：0=待处理，1=已下发(已返回给客户端)，2=已消费完成，3=已取消，4=已过期,;
      */
-    public byte status;
+    public int status;
     /**
      * 业务主键，如中奖记录ID、订单号，用于幂等/排重,;
      */

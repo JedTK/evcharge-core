@@ -29,15 +29,15 @@ public class PopupUserStateEntity extends BaseEntity implements Serializable {
     /**
      * 是否已曝光(IMPRESSION),;
      */
-    public byte seen;
+    public int seen;
     /**
      * 是否已点击主按钮,;
      */
-    public byte clicked;
+    public int clicked;
     /**
      * 是否已关闭,;
      */
-    public byte closed;
+    public int closed;
     /**
      * 活动期累计展示次数（可选：按IMPRESSION累计）,;
      */
