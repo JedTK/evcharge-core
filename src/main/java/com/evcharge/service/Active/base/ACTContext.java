@@ -22,7 +22,7 @@ public class ACTContext {
     /**
      * 幂等业务键(订单号/充值单号/自定义)
      */
-    public String bizKey;
+    public String biz_key;
     /**
      * 现在发生的时间戳
      */

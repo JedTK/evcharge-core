@@ -1,5 +1,6 @@
 package com.evcharge.service.Active;
 
+import com.evcharge.service.Active.Strategy.DefaultACTStrategy;
 import com.evcharge.service.Active.base.ACTStrategy;
 import com.evcharge.service.Active.base.IACTStrategy;
 import com.xyzs.entity.SyncResult;
@@ -31,6 +32,13 @@ public class ACTStrategyFactory {
     private static volatile boolean INITIALIZED = false;
 
     /**
+     * 初始化
+     */
+    public static void init() {
+        register(DefaultACTStrategy.class.getPackageName());
+    }
+
+    /**
      * 注册活动策略（实例）
      */
     public static SyncResult register(String strategyCode, IACTStrategy strategy, boolean forced) {
@@ -60,6 +68,46 @@ public class ACTStrategyFactory {
 
         LogsUtil.info(TAG, "注册活动策略成功：%s -> %s", strategyCode, strategy.getClass().getName());
         return new SyncResult(0, "");
+    }
+
+    /**
+     * 注册活动策略（从策略类 @ACTStrategy 注解读取 code）
+     */
+    public static SyncResult register(IACTStrategy strategy) {
+        return register(strategy, false);
+    }
+
+    /**
+     * 注册活动策略（从策略类 @ACTStrategy 注解读取 code）
+     *
+     * @param strategy 策略实例
+     * @param forced   是否强制覆盖
+     */
+    public static SyncResult register(IACTStrategy strategy, boolean forced) {
+        if (strategy == null) {
+            LogsUtil.warn(TAG, "注册失败：策略实例为空");
+            return new SyncResult(2, "策略实例为空");
+        }
+
+        Class<?> clz = strategy.getClass();
+
+        // 读取注解
+        ACTStrategy meta = clz.getAnnotation(ACTStrategy.class);
+        if (meta == null) {
+            LogsUtil.warn(TAG, "注册失败：策略类缺少 @ACTStrategy 注解：%s", clz.getName());
+            return new SyncResult(2, "策略类缺少@ACTStrategy注解:" + clz.getName());
+        }
+
+        String code = meta.code();
+        if (StringUtil.isEmpty(code)) {
+            LogsUtil.warn(TAG, "注册失败：@ACTStrategy.code 为空：%s", clz.getName());
+            return new SyncResult(2, "@ACTStrategy.code不能为空:" + clz.getName());
+        }
+
+        code = code.trim();
+
+        // 走你已有的注册逻辑（含重复检测/覆盖）
+        return register(code, strategy, forced);
     }
 
     /**
@@ -132,7 +180,7 @@ public class ACTStrategyFactory {
     /**
      * 按策略编码查找
      */
-    public static IACTStrategy findByStrategyCode(String strategyCode) {
+    public static IACTStrategy getStrategy(String strategyCode) {
         if (StringUtil.isEmpty(strategyCode)) return null;
         return STRATEGY_MAP.get(strategyCode.trim());
     }

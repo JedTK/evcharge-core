@@ -29,7 +29,7 @@ public class ACTConfigService {
     }
 
     /**
-     * 活动活动配置信息
+     * 活动配置信息
      *
      * @param activity_code 活动代码
      * @return 活动配置实体类
@@ -39,7 +39,7 @@ public class ACTConfigService {
     }
 
     /**
-     * 活动活动配置信息
+     * 活动配置信息
      *
      * @param activity_code 活动代码
      * @param inCache       是否优先从缓存中获取
@@ -47,7 +47,7 @@ public class ACTConfigService {
      */
     public ACTConfigEntity getConfig(String activity_code, boolean inCache) {
         ACTConfigEntity entity = new ACTConfigEntity();
-        if (inCache) entity.cache(String.format("BaseData:ACTConfig:%s", activity_code));
+        if (inCache) entity.cache(String.format("ACT:Config:%s", activity_code));
         entity.where("activity_code", activity_code);
         return entity.findEntity();
     }
