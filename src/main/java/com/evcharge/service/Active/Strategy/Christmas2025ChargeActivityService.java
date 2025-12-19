@@ -1,4 +1,4 @@
-package com.evcharge.service.Active;
+package com.evcharge.service.Active.Strategy;
 
 import com.evcharge.service.Active.base.ACTContext;
 import com.evcharge.service.Active.base.ACTStrategy;
@@ -34,10 +34,6 @@ public class Christmas2025ChargeActivityService implements IACTStrategy {
 //    private final static long end_time = TimeUtil.toTimestamp("2025-12-25 23:59:59");
 
 
-    @Override
-    public String code() {
-        return "";
-    }
 
     @Override
     public ISyncResult execute(ACTContext ctx) throws Exception {
