@@ -1,5 +1,6 @@
 package com.evcharge.service.popup;
 
+import com.alibaba.fastjson2.JSONArray;
 import com.alibaba.fastjson2.JSONObject;
 import com.evcharge.entity.popup.PopupConfigEntity;
 import com.evcharge.entity.popup.PopupMessageEntity;
@@ -590,45 +591,117 @@ public class PopupService {
     }
 
     /**
-     * 列表/通配匹配工具
-     * <p>
-     * 支持的 raw 格式：
-     * 1) 空字符串：视为不限制（直接放行）
-     * 2) "*" 或 "ALL"：放行
-     * 3) 逗号分隔列表：MINI_PROGRAM,IOS
-     * 4) 前缀通配：app_*  或  page/*（只支持末尾 * 的简单前缀匹配）
-     * <p>
-     * 匹配规则：
-     * - token 完全相等：命中
-     * - token 以 * 结尾：按前缀匹配 value.startsWith(prefix)
-     * <p>
-     * 说明：
-     * - 当前匹配是大小写敏感（token.equals(value)），如果你希望不敏感可统一转大写比较
+     * JSON 列表匹配工具（支持通配与可选排除）
      *
-     * @param raw   配置中的规则字符串
-     * @param value 当前请求的 scene_code 或 client_code
-     * @return 是否命中
+     * 规则来源：数据库配置字段（必须是 JSON 数组字符串）
+     * 示例：
+     * 1) 不限制（放行）：null / "" / "[]" / ["*"] / ["ALL"]
+     * 2) 精确匹配：["MINI_PROGRAM","IOS"]
+     * 3) 前缀通配：["/pages/*","app_*"]   （仅支持末尾 '*' 的前缀通配）
+     * 4) 排除规则（可选）：["/pages/*","!/pages/debug/*"]
+     *
+     * 匹配语义：
+     * - 默认是“白名单匹配”：命中任意正向 token 即通过
+     * - 若存在排除 token（以 '!' 开头），且 value 命中排除规则，则直接拒绝（优先级最高）
+     *
+     * 注意事项：
+     * - 空数组/空字符串：视为不限制（返回 true）
+     * - "*" / "ALL"：视为全放行（返回 true）
+     * - 解析失败：视为不命中（返回 false），并记录 warn 日志，便于排查脏配置
+     * - 是否大小写敏感：由 ignoreCase 控制；路径通常建议敏感，client_code 可不敏感
+     *
+     * @param rawJsonArray 配置规则（JSON 数组字符串）
+     * @param value        待匹配值（scene_code/client_code）
+     * @return true=命中/放行；false=不命中/拦截
      */
-    private boolean matchList(String raw, String value) {
-        String s = raw.trim();
+    private boolean matchList(String rawJsonArray, String value) {
+        return matchList(rawJsonArray, value, false);
+    }
+
+    /**
+     * @param ignoreCase 是否忽略大小写（true 时用 equalsIgnoreCase/startsWithIgnoreCase）
+     */
+    private boolean matchList(String rawJsonArray, String value, boolean ignoreCase) {
+        // value 为空：按空字符串处理，避免 NPE
+        value = (value == null) ? "" : value;
+
+        // 规则为空：不限制 -> 放行
+        if (StringUtil.isEmpty(rawJsonArray)) return true;
+
+        String s = rawJsonArray.trim();
+        if (s.isEmpty()) return true;
+
+        // 兼容极端情况：有人直接写 "*" 或 "ALL"（虽然你说全 JSON，但留着更稳）
         if ("*".equals(s) || "ALL".equalsIgnoreCase(s)) return true;
 
-        // 支持逗号列表：MINI_PROGRAM,IOS
-        String[] arr = s.split(",");
-        for (String it : arr) {
-            String token = it.trim();
+        final JSONArray arr;
+        try {
+            arr = JSONArray.parseArray(s);
+        } catch (Exception e) {
+            LogsUtil.warn(TAG, "matchList：规则不是合法 JSON 数组，raw=" + s);
+            return false;
+        }
+
+        // 空数组：不限制 -> 放行
+        if (arr == null || arr.isEmpty()) return true;
+
+        // 先处理排除规则：任何一个排除命中 -> 直接拒绝
+        for (int i = 0; i < arr.size(); i++) {
+            String token = StringUtil.trimToEmpty(arr.getString(i));
             if (token.isEmpty()) continue;
 
-            // 完全相等命中
-            if (token.equals(value)) return true;
-
-            // 简单通配：token 末尾为 * 时做前缀匹配
-            if (token.endsWith("*")) {
-                String prefix = token.substring(0, token.length() - 1);
-                if (value.startsWith(prefix)) return true;
+            if (token.charAt(0) == '!') {
+                String deny = token.substring(1).trim();
+                if (deny.isEmpty()) continue;
+                if (matchToken(deny, value, ignoreCase)) return false;
             }
         }
+
+        // 再处理放行规则：任一命中 -> 放行
+        for (int i = 0; i < arr.size(); i++) {
+            String token = StringUtil.trimToEmpty(arr.getString(i));
+            if (token.isEmpty()) continue;
+
+            // 跳过排除 token
+            if (token.charAt(0) == '!') continue;
+
+            // 全放行 token
+            if ("*".equals(token) || "ALL".equalsIgnoreCase(token)) return true;
+
+            if (matchToken(token, value, ignoreCase)) return true;
+        }
+
         return false;
+    }
+
+    /**
+     * 单个 token 匹配：
+     * - 精确匹配：token == value
+     * - 前缀通配：token 以 '*' 结尾，则比较 value 是否以 token 去掉 '*' 的前缀开头
+     */
+    private boolean matchToken(String token, String value, boolean ignoreCase) {
+        if (!ignoreCase) {
+            if (token.equals(value)) return true;
+            if (token.endsWith("*")) {
+                String prefix = token.substring(0, token.length() - 1);
+                return !prefix.isEmpty() && value.startsWith(prefix);
+            }
+            return false;
+        }
+
+        // ignoreCase = true
+        if (token.equalsIgnoreCase(value)) return true;
+        if (token.endsWith("*")) {
+            String prefix = token.substring(0, token.length() - 1);
+            return !prefix.isEmpty() && startsWithIgnoreCase(value, prefix);
+        }
+        return false;
+    }
+
+    private boolean startsWithIgnoreCase(String s, String prefix) {
+        if (s == null || prefix == null) return false;
+        if (prefix.length() > s.length()) return false;
+        return s.regionMatches(true, 0, prefix, 0, prefix.length());
     }
 
     // endregion

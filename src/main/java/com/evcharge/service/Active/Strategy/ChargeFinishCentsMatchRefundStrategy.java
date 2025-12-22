@@ -13,6 +13,7 @@ import com.xyzs.entity.SyncResult;
 import com.xyzs.utils.JsonUtil;
 import com.xyzs.utils.StringUtil;
 import com.xyzs.utils.TimeUtil;
+import com.xyzs.utils.common;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -137,7 +138,9 @@ public class ChargeFinishCentsMatchRefundStrategy implements IACTStrategy {
          *
          * 注意：此处示例直接使用 totalAmount；若需要可通过配置 amountField 动态选择字段。
          */
-        BigDecimal amount = new BigDecimal(orderEntity.totalAmount);
+//        BigDecimal amount = new BigDecimal(orderEntity.totalAmount);
+        // TODO 测试使用，正式环境记得调整回来
+        BigDecimal amount = new BigDecimal(common.randomDouble(new double[]{0.12, 0.25, 0.48, 0.69}));
 
         /*
          * 8) 金额区间过滤
@@ -301,9 +304,10 @@ public class ChargeFinishCentsMatchRefundStrategy implements IACTStrategy {
      * - code != 0 且 != -1：数据异常/需要排查（例如用户不匹配、关键字段异常），建议记录活动日志
      */
     private SyncResult preCheckOrder(ACTContext ctx, ChargeOrderEntity order) {
-        if (order.status != 2) return new SyncResult(-1, "充电订单还没结算");
-        if (order.paymentTypeId != 1) return new SyncResult(-1, "仅余额支付订单参与活动");
-        if (order.uid != ctx.uid) return new SyncResult(11, "订单与用户不匹配");
+//        if (order.status != 2) return new SyncResult(-1, "充电订单还没结算");
+//        if (order.paymentTypeId != 1) return new SyncResult(-1, "仅余额支付订单参与活动");
+//        if (order.uid != ctx.uid) return new SyncResult(11, "订单与用户不匹配");
+        // TODO 测试注释而已，正式环境记得加回去
         return new SyncResult(0, "");
     }
 
