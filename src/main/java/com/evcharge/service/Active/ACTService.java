@@ -138,7 +138,7 @@ public class ACTService {
      *                       - 如果活动包含“必须影响主流程结果”的强约束逻辑（通常不建议），不应使用 triggerAsync。
      */
     public void triggerAsync(String scene_code, long uid, String biz_key, JSONObject params, IAsyncListener iAsyncListener) {
-        ThreadUtil.getInstance().execute(TAG, () -> {
+        ThreadUtil.getInstance().execute(() -> {
             ISyncResult r = trigger(scene_code, uid, biz_key, params);
             if (iAsyncListener != null) iAsyncListener.onResult(0, r);
         });

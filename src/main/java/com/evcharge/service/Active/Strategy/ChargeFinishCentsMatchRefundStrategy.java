@@ -379,10 +379,13 @@ public class ChargeFinishCentsMatchRefundStrategy implements IACTStrategy {
      * - 在高并发场景，建议使用更强的幂等手段（唯一键/CAS）以规避竞态条件。
      */
     private SyncResult refundHandle(ChargeOrderEntity order, BigDecimal refundAmount, String reason) {
-        if (ChargeRefundOrderEntity.getInstance()
-                .where("OrderSN", order.OrderSN)
-                .where("uid", order.uid)
-                .exist()) return new SyncResult(11, "订单已退款");
-        return ChargeRefundOrderEntity.getInstance().refund(order.OrderSN, refundAmount.doubleValue(), reason);
+        // TODO 测试使用，正式环境请还回来
+        return new SyncResult(0, "");
+
+//        if (ChargeRefundOrderEntity.getInstance()
+//                .where("OrderSN", order.OrderSN)
+//                .where("uid", order.uid)
+//                .exist()) return new SyncResult(11, "订单已退款");
+//        return ChargeRefundOrderEntity.getInstance().refund(order.OrderSN, refundAmount.doubleValue(), reason);
     }
 }
