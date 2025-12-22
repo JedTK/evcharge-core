@@ -3,7 +3,6 @@ package com.evcharge.entity.station;
 
 import com.evcharge.entity.recharge.RechargeRefundOrderEntity;
 import com.evcharge.entity.sys.SysGlobalConfigEntity;
-import com.evcharge.entity.user.UserBalanceLogEntity;
 import com.evcharge.entity.user.UserSummaryEntity;
 import com.evcharge.enumdata.EBalanceUpdateType;
 import com.evcharge.enumdata.ERefundStatus;

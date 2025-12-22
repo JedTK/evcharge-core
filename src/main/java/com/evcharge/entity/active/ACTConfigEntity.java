@@ -1,6 +1,7 @@
 package com.evcharge.entity.active;
 
 
+import com.xyzs.annotation.TargetDB;
 import com.xyzs.entity.BaseEntity;
 
 import java.io.Serializable;
@@ -10,6 +11,7 @@ import java.io.Serializable;
  *
  * @date : 2025-12-19
  */
+@TargetDB("evcharge_activity")
 public class ACTConfigEntity extends BaseEntity implements Serializable {
     //region -- 实体类属性 --
     /**
@@ -37,17 +39,9 @@ public class ACTConfigEntity extends BaseEntity implements Serializable {
      */
     public String params_json;
     /**
-     * 场景匹配模式：1=按ActivityScene表，2=全局(谨慎),;
-     */
-    public byte scene_mode;
-    /**
-     * 优先级(越小越先执行),;
-     */
-    public int priority;
-    /**
      * 状态：0=停用，1=启用,;
      */
-    public byte status;
+    public int status;
     /**
      * 开始时间(毫秒时间戳),;
      */
@@ -56,14 +50,6 @@ public class ACTConfigEntity extends BaseEntity implements Serializable {
      * 结束时间(毫秒时间戳),;
      */
     public long end_time;
-    /**
-     * 平台代码,;
-     */
-    public String platform_code;
-    /**
-     * 组织代码,;
-     */
-    public String organize_code;
     /**
      * 备注,;
      */

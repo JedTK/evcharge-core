@@ -1,5 +1,6 @@
 package com.evcharge.entity.active;
 
+import com.xyzs.annotation.TargetDB;
 import com.xyzs.entity.BaseEntity;
 
 import java.io.Serializable;
@@ -9,6 +10,7 @@ import java.io.Serializable;
  *
  * @date : 2025-12-19
  */
+@TargetDB("evcharge_activity")
 public class ACTSceneEntity extends BaseEntity implements Serializable {
     //region -- 实体类属性 --
     /**
@@ -26,7 +28,11 @@ public class ACTSceneEntity extends BaseEntity implements Serializable {
     /**
      * 状态：0=停用，1=启用,;
      */
-    public byte status;
+    public int status;
+    /**
+     * 优先级(越小越先执行),;
+     */
+    public int priority;
     /**
      * 创建时间戳,;
      */

@@ -25,7 +25,6 @@ import com.evcharge.service.User.UserMemberService;
 import com.xyzs.entity.DataService;
 import com.xyzs.entity.SyncResult;
 import com.xyzs.utils.*;
-import org.bouncycastle.pqc.crypto.xmss.XMSSAddress;
 import org.springframework.lang.NonNull;
 import org.springframework.util.StringUtils;
 
@@ -870,10 +869,6 @@ public class EvChargeHelper {
 
     /**
      * 充电预计扣费
-     *
-     * @param chargeStandardItemEntity
-     * @param chargeTime_second
-     * @return
      */
     public static double estimateBillingAmount(@NonNull ChargeStandardItemEntity chargeStandardItemEntity, long chargeTime_second) {
         BigDecimal estimateBillingAmount = mChargingSettlementV2.estimateBillingAmount(chargeStandardItemEntity, chargeStandardItemEntity.maxPower, chargeTime_second);
@@ -886,7 +881,6 @@ public class EvChargeHelper {
      * @param orderEntity              充电订单实体类
      * @param chargeStandardItemEntity 充电收费标准实体类
      * @param stopTime                 充电停止时间
-     * @return
      */
     public double billing_20231211(ChargeOrderEntity orderEntity, ChargeStandardItemEntity chargeStandardItemEntity, long stopTime) {
         BigDecimal totalAmount = new BigDecimal(0);
