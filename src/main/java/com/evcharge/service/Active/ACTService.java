@@ -192,7 +192,8 @@ public class ACTService {
                 if (r.isSuccess()) success++;
                 else {
                     // -1 表示跳过，不作为异常；其他非 0 记录 warn
-                    if (r.getCode() != -1) LogsUtil.warn(TAG, "[%s] - %s", activity_code, r.getMsg());
+//                    if (r.getCode() != -1) LogsUtil.warn(TAG, "[%s] - %s", activity_code, r.getMsg());
+                    LogsUtil.warn(TAG, "[%s] - %s", activity_code, r.getMsg());
                     error++;
                 }
             }
