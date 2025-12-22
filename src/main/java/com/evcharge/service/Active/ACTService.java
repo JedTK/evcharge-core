@@ -48,7 +48,6 @@ public class ACTService {
 
     private final static String TAG = "活动业务";
 
-
     private volatile static ACTService instance;
 
     /**
@@ -65,6 +64,58 @@ public class ACTService {
             }
         }
         return instance;
+    }
+
+    /**
+     * 活动异步触发器
+     * <p>
+     * 语义
+     * - 将 trigger(...) 放入线程池执行，避免阻塞主流程。
+     * - 适用于：结算后抽奖、弹窗消息、发券、积分、站内信等“可延后执行”的动作。
+     * <p>
+     * 参数说明
+     *
+     * @param scene_code     场景编码，用于关联 ACTScene 配置（例如 charge_finish / recharge_callback）
+     * @param uid            用户ID，必须 > 0
+     * @param biz_key        幂等业务键：要求“同一场景下，同一用户的一次业务事件”保持唯一
+     * @param params         策略执行所需参数，允许为 null（策略内部自行处理）
+     * @param iAsyncListener 异步回调监听：这里统一 onResult(0, r)，r 为 trigger 的结果
+     *                       <p>
+     *                       注意事项
+     *                       - 异步模式下，主流程无法感知活动执行失败；失败只能靠日志与活动日志表回溯。
+     *                       - 如果活动包含“必须影响主流程结果”的强约束逻辑（通常不建议），不应使用 triggerAsync。
+     */
+    public void triggerAsync(@NonNull ACTSceneCode scene_code, long uid, String biz_key, JSONObject params, IAsyncListener iAsyncListener) {
+        triggerAsync(scene_code.code(), uid, biz_key, params, iAsyncListener);
+    }
+
+    /**
+     * 活动同步触发器（按场景触发多个活动）
+     * <p>
+     * 处理流程
+     * 1、参数校验（scene_code、uid）
+     * 2、根据 scene_code 查询该场景绑定的活动列表（ACTSceneService.getList）
+     * 3、遍历每个活动编码 activity_code，逐个触发 triggerByActivateCode
+     * 4、统计成功与失败次数（注意：-1 也会计入 error 计数，但不会 warn 打印）
+     * <p>
+     * 返回数据
+     * - code=0：表示触发流程跑完（不代表每个活动都成功）
+     * - data：包含 success / error 统计
+     * <p>
+     * 失败与异常
+     * - 当某个活动返回 code=-1：表示正常跳过（例如活动未开始/已结束/未命中/已执行过）
+     * - 当某个活动返回 code!=0 且 !=-1：记录 warn，并计入 error
+     * - 发生未捕获异常：记录 error，并返回 code=1 的兜底结果
+     * <p>
+     * 参数说明
+     *
+     * @param scene_code 场景编码（必填）
+     * @param uid        用户ID（必填，必须 > 0）
+     * @param biz_key    幂等业务键（必填）
+     * @param params     参数值（可为 null，建议传入以便策略取用）
+     */
+    public ISyncResult trigger(@NonNull ACTSceneCode scene_code, long uid, @NonNull String biz_key, JSONObject params) {
+        return trigger(scene_code.code(), uid, biz_key, params);
     }
 
     /**
