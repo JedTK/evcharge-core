@@ -54,7 +54,7 @@ public class ACTSceneService {
                 .where("status", 1)
                 .order("priority")
         ;
-        return entity.selectList();
+        return entity.select();
     }
 
     /**

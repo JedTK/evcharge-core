@@ -24,10 +24,6 @@ public class ACTContext {
      */
     public String biz_key;
     /**
-     * 现在发生的时间戳
-     */
-    public long now_time;
-    /**
      * 活动配置
      */
     public ACTConfigEntity config;
