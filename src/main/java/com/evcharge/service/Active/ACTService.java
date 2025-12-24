@@ -3,7 +3,6 @@ package com.evcharge.service.Active;
 import com.alibaba.fastjson2.JSONObject;
 import com.evcharge.entity.active.ACTConfigEntity;
 import com.evcharge.entity.active.ACTLogsEntity;
-import com.evcharge.entity.active.ACTSceneEntity;
 import com.evcharge.service.Active.base.ACTContext;
 import com.evcharge.service.Active.base.IACTStrategy;
 import com.xyzs.entity.IAsyncListener;
@@ -11,7 +10,6 @@ import com.xyzs.entity.ISyncResult;
 import com.xyzs.entity.SyncResult;
 import com.xyzs.utils.*;
 import lombok.NonNull;
-import org.apache.logging.log4j.Level;
 
 import java.util.*;
 
@@ -327,7 +325,7 @@ public class ACTService {
     private static final Object[] EMPTY_ARGS = new Object[0];
 
     /**
-     * 记录流程日志（性能优先 + 稳定兜底）
+     * 记录流程日志
      * debug_level：0=关闭, 1=基础(成功/关键节点/错误), 2=详细(包含未命中/分支), 3=全量(附带更多上下文)
      * <p>
      * 约定：
@@ -345,90 +343,118 @@ public class ACTService {
         final boolean err = (!ok && !skip);
 
         // 输出门槛：1 输出 ok + err；2 额外输出 skip；3 全量
-        final int needLevel = skip ? 2 : 1;
-        if (debug_level < needLevel) return;
+        if (skip && debug_level < 2) return;
+        if (!skip && debug_level < 1) return;
 
-        final String prefix = ok ? "[OK]" : (skip ? "[SKIP]" : "[ERR]");
-        String fmt2 = prefix + " " + fmt;
+        Object[] baseArgs = (args == null || args.length == 0) ? EMPTY_ARGS : args;
 
-        Object[] finalArgs = (args == null || args.length == 0) ? EMPTY_ARGS : args;
+        // 3=全量：把 code/msg/data 放到最后；data 有值才拼接
+        String fmt2 = fmt;
+        Object[] finalArgs = baseArgs;
 
-        // 3=全量：追加 code/msg/data（注意 data 可能很大，只在 3 级输出）
         if (debug_level >= 3) {
-            final String extraMsg = String.valueOf(r.getMsg());
+            String msg = String.valueOf(r.getMsg());
 
-            String extraData = "";
-            Object dataObj = r.getData();
-            if (dataObj != null) {
-                if (dataObj instanceof String) {
-                    extraData = (String) dataObj;
-                } else {
+            boolean hasData = hasMeaningfulData(r.getData());
+            String dataStr = null;
+
+            if (hasData) {
+                Object dataObj = r.getData();
+                if (dataObj instanceof String) dataStr = (String) dataObj;
+                else {
                     try {
-                        extraData = JSONObject.toJSONString(dataObj);
+                        dataStr = JSONObject.toJSONString(dataObj);
                     } catch (Exception ignore) {
-                        extraData = "<data_to_json_failed>";
+                        dataStr = "<data_to_json_failed>";
                     }
                 }
             }
 
-            fmt2 = prefix + "[code=%s][msg=%s][data=%s] " + fmt;
-            finalArgs = merge3(code, extraMsg, extraData, finalArgs);
+            // 尾部格式：code=%s,msg=%s,data=%s（data 有值才加）
+            if (hasData) {
+                fmt2 = fmt + " code=%s,msg=%s,data=%s";
+                finalArgs = appendArgs(baseArgs, code, msg, dataStr);
+            } else {
+                fmt2 = fmt + " code=%s,msg=%s";
+                finalArgs = appendArgs(baseArgs, code, msg);
+            }
         }
 
-        // ✅ 稳定关键：不允许日志格式化异常影响主流程
-        safeEmit(err, skip, fmt2, finalArgs, code, r.getMsg());
+        // ✅ 稳定关键：日志绝不能炸主流程
+        safeEmit(err, fmt2, finalArgs, code, r.getMsg());
+    }
+
+    /**
+     * data “存在值”判断：尽量不做重活，只做轻判断，避免性能开销
+     */
+    private static boolean hasMeaningfulData(Object data) {
+        if (data == null) return false;
+
+        if (data instanceof CharSequence) {
+            return ((CharSequence) data).length() > 0;
+        }
+        if (data instanceof Map) {
+            return !((Map<?, ?>) data).isEmpty();
+        }
+        if (data instanceof Collection) {
+            return !((Collection<?>) data).isEmpty();
+        }
+
+        // JSONObject/JSONArray 也能走 Map/Collection 分支（fastjson2 的实现大多兼容）
+        // 其他类型：视为有值（例如数字、实体对象）
+        return true;
+    }
+
+    /**
+     * 把追加参数放到最后（因为你要把 code/msg/data 放在末尾）
+     */
+    private static Object[] appendArgs(Object[] base, Object... tail) {
+        int n1 = (base == null) ? 0 : base.length;
+        int n2 = (tail == null) ? 0 : tail.length;
+
+        Object[] out = new Object[n1 + n2];
+        if (n1 > 0) System.arraycopy(base, 0, out, 0, n1);
+        if (n2 > 0) System.arraycopy(tail, 0, out, n1, n2);
+        return out;
     }
 
     /**
      * 安全输出：
-     * 1) args 为空时，用 "%s" 包一层，彻底规避 fmt 中 '%' 触发 String.format 崩溃
-     * 2) 捕获 IllegalFormatException / Exception，保证业务不中断
+     * - args 为空时，用 "%s" 包一层，彻底规避 fmt 中 '%'（比如“50%”）导致 String.format 崩溃
+     * - 捕获 IllegalFormatException / Exception，保证业务不中断
      */
-    private static void safeEmit(boolean err, boolean skip, String fmt, Object[] args, int code, String msg) {
+    private static void safeEmit(boolean err, String fmt, Object[] args, int code, String msg) {
         try {
-            // args 为空：把 fmt 当普通字符串输出，避免 fmt 里含 % 导致 format 崩溃
+            // args 为空：把 fmt 当纯文本输出，避免 fmt 里含 % 触发 format 解析
             if (args == null || args.length == 0) {
                 if (err) LogsUtil.warn(TAG, "%s", fmt);
-                else LogsUtil.info(TAG, "%s", fmt); // skip 也用 info（若你有 debug，建议改 debug）
+                else LogsUtil.info(TAG, "%s", fmt);
                 return;
             }
 
-            // args 非空：正常 format 输出
-            if (err) {
-                LogsUtil.warn(TAG, fmt, args);
-            } else {
-                // ok / skip
-                LogsUtil.info(TAG, fmt, args);
-            }
-        } catch (IllegalFormatException formatEx) {
-            // 格式化失败兜底（避免再次 format 崩溃，一律用 "%s"）
+            if (err) LogsUtil.warn(TAG, fmt, args);
+            else LogsUtil.info(TAG, fmt, args);
+
+        } catch (IllegalFormatException ife) {
+            // 格式化失败兜底：避免再次 format 崩溃，一律用 "%s"
             try {
-                String fallback = "log format error: fmt=" + fmt
-                        + ", args=" + Arrays.toString(args)
-                        + ", code=" + code
-                        + ", msg=" + msg;
-                LogsUtil.warn(TAG, "%s", fallback);
+                LogsUtil.warn(TAG, "%s",
+                        "log format error: fmt=" + fmt
+                                + ", argsLen=" + (args == null ? 0 : args.length)
+                                + ", code=" + code
+                                + ", msg=" + msg
+                );
             } catch (Exception ignore) {
-                // 兜底的兜底：吞掉，保证业务不中断
+                // 吞掉，保证业务不中断
             }
         } catch (Exception any) {
-            // 任何其他日志异常都不能影响业务
+            // 任何日志异常都不能影响业务
             try {
                 LogsUtil.warn(TAG, "%s", "log emit error: " + any.getClass().getSimpleName() + " - " + any.getMessage());
             } catch (Exception ignore) {
                 // 吞掉
             }
         }
-    }
-
-    private static Object[] merge3(Object a, Object b, Object c, Object[] rest) {
-        int n = (rest == null) ? 0 : rest.length;
-        Object[] out = new Object[3 + n];
-        out[0] = a;
-        out[1] = b;
-        out[2] = c;
-        if (n > 0) System.arraycopy(rest, 0, out, 3, n);
-        return out;
     }
     // endregion
 }
