@@ -379,6 +379,14 @@ public class ChargeFinishCentsMatchRefundStrategy implements IACTStrategy {
                 .where("OrderSN", order.OrderSN)
                 .where("uid", order.uid)
                 .exist()) return new SyncResult(11, "订单已退款");
-        return ChargeRefundOrderEntity.getInstance().refund(order.OrderSN, refundAmount.doubleValue(), reason);
+        SyncResult r = ChargeRefundOrderEntity.getInstance().refund(order.OrderSN, refundAmount.doubleValue(), reason);
+        if (r.code == 0) {
+            ChargeOrderEntity.getInstance()
+                    .where("OrderSN", order.OrderSN)
+                    .update(new LinkedHashMap<>() {{
+                        put("discountAmount", refundAmount);
+                    }});
+        }
+        return r;
     }
 }

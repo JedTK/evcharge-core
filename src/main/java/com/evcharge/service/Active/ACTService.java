@@ -13,9 +13,7 @@ import com.xyzs.utils.*;
 import lombok.NonNull;
 import org.apache.logging.log4j.Level;
 
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 /**
  * 活动业务逻辑（Activity Trigger Service）
@@ -325,45 +323,112 @@ public class ACTService {
         return new SyncResult(1, "");
     }
 
+    // region 日志记录
+    private static final Object[] EMPTY_ARGS = new Object[0];
+
     /**
-     * 记录流程日志
-     * <p>
-     * debug_level：0=关闭,1=基础(成功/关键节点),2=详细(包含未命中/分支),3=全量(最啰嗦，包含更多细节)
+     * 记录流程日志（性能优先 + 稳定兜底）
+     * debug_level：0=关闭, 1=基础(成功/关键节点/错误), 2=详细(包含未命中/分支), 3=全量(附带更多上下文)
      * <p>
      * 约定：
      * - code==0      : 成功
-     * - code==-1     : 未命中/跳过（可按你业务定义）
-     * - code!=0 && !=-1 : 异常/失败
+     * - code==-1     : 未命中/跳过（正常分支）
+     * - 其他         : 业务失败/异常码（建议 warn；真正异常在 catch 里 error）
      */
-    private static void log(ISyncResult r, int debug_level, String msg, Object... args) {
-        if (debug_level <= 0 || r == null) return;
+    private static void log(ISyncResult r, int debug_level, String fmt, Object... args) {
+        if (r == null || debug_level <= 0) return;
+        if (StringUtil.isEmpty(fmt)) return;
 
         final int code = r.getCode();
+        final boolean ok = (code == 0);
+        final boolean skip = (code == -1);
+        final boolean err = (!ok && !skip);
 
-        // 是否允许输出：级别越高包含越多（推荐用 >= 语义）
-        final boolean isOk = (code == 0);
-        final boolean isSkip = (code == -1);
-        final boolean isErr = (!isOk && !isSkip);
+        // 输出门槛：1 输出 ok + err；2 额外输出 skip；3 全量
+        final int needLevel = skip ? 2 : 1;
+        if (debug_level < needLevel) return;
 
-        // 输出门槛：你可以按团队习惯调整
-        // 1: 只输出成功/关键节点
-        // 2: 输出成功 + 未命中/分支 + 异常
-        // 3: 全量（最啰嗦）
-        boolean allow = (debug_level >= 1 && isOk) ||
-                (debug_level >= 2 && isSkip) ||
-                (debug_level >= 2 && isErr) ||
-                (debug_level >= 3); // 兜底：3 永远输出
+        final String prefix = ok ? "[OK]" : (skip ? "[SKIP]" : "[ERR]");
+        String fmt2 = prefix + " " + fmt;
 
-        if (!allow) return;
+        Object[] finalArgs = (args == null || args.length == 0) ? EMPTY_ARGS : args;
 
-        // 日志级别：成功用 info，未命中用 debug/trace 更合适，异常用 warn/error
-        if (isErr) {
-            LogsUtil.error(TAG, msg, args);
-        } else if (isSkip) {
-            // 如果没有 debug，就用 info（不建议用 warn）
-            LogsUtil.warn(TAG, msg, args);
-        } else {
-            LogsUtil.info(TAG, msg, args);
+        // 3=全量：追加 code/msg/data（注意 data 可能很大，只在 3 级输出）
+        if (debug_level >= 3) {
+            final String extraMsg = String.valueOf(r.getMsg());
+
+            String extraData = "";
+            Object dataObj = r.getData();
+            if (dataObj != null) {
+                if (dataObj instanceof String) {
+                    extraData = (String) dataObj;
+                } else {
+                    try {
+                        extraData = JSONObject.toJSONString(dataObj);
+                    } catch (Exception ignore) {
+                        extraData = "<data_to_json_failed>";
+                    }
+                }
+            }
+
+            fmt2 = prefix + "[code=%s][msg=%s][data=%s] " + fmt;
+            finalArgs = merge3(code, extraMsg, extraData, finalArgs);
+        }
+
+        // ✅ 稳定关键：不允许日志格式化异常影响主流程
+        safeEmit(err, skip, fmt2, finalArgs, code, r.getMsg());
+    }
+
+    /**
+     * 安全输出：
+     * 1) args 为空时，用 "%s" 包一层，彻底规避 fmt 中 '%' 触发 String.format 崩溃
+     * 2) 捕获 IllegalFormatException / Exception，保证业务不中断
+     */
+    private static void safeEmit(boolean err, boolean skip, String fmt, Object[] args, int code, String msg) {
+        try {
+            // args 为空：把 fmt 当普通字符串输出，避免 fmt 里含 % 导致 format 崩溃
+            if (args == null || args.length == 0) {
+                if (err) LogsUtil.warn(TAG, "%s", fmt);
+                else LogsUtil.info(TAG, "%s", fmt); // skip 也用 info（若你有 debug，建议改 debug）
+                return;
+            }
+
+            // args 非空：正常 format 输出
+            if (err) {
+                LogsUtil.warn(TAG, fmt, args);
+            } else {
+                // ok / skip
+                LogsUtil.info(TAG, fmt, args);
+            }
+        } catch (IllegalFormatException formatEx) {
+            // 格式化失败兜底（避免再次 format 崩溃，一律用 "%s"）
+            try {
+                String fallback = "log format error: fmt=" + fmt
+                        + ", args=" + Arrays.toString(args)
+                        + ", code=" + code
+                        + ", msg=" + msg;
+                LogsUtil.warn(TAG, "%s", fallback);
+            } catch (Exception ignore) {
+                // 兜底的兜底：吞掉，保证业务不中断
+            }
+        } catch (Exception any) {
+            // 任何其他日志异常都不能影响业务
+            try {
+                LogsUtil.warn(TAG, "%s", "log emit error: " + any.getClass().getSimpleName() + " - " + any.getMessage());
+            } catch (Exception ignore) {
+                // 吞掉
+            }
         }
     }
+
+    private static Object[] merge3(Object a, Object b, Object c, Object[] rest) {
+        int n = (rest == null) ? 0 : rest.length;
+        Object[] out = new Object[3 + n];
+        out[0] = a;
+        out[1] = b;
+        out[2] = c;
+        if (n > 0) System.arraycopy(rest, 0, out, 3, n);
+        return out;
+    }
+    // endregion
 }
