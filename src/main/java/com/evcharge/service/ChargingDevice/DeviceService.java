@@ -11,6 +11,7 @@ import com.xyzs.utils.ThreadPoolManager;
 import lombok.NonNull;
 
 import java.util.LinkedHashMap;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 
@@ -150,8 +151,37 @@ public class DeviceService {
         set_data.put("appChannelCode", appChannelCode);
 
         try {
-            deviceEntity.where("deviceCode", deviceEntity.deviceCode).update(set_data);
+            if (deviceEntity.isHost == 1) {
+                // 如果是主机，顺便更新从机的appChannelCode
+                DeviceEntity nd = new DeviceEntity();
+                nd.field("id,deviceCode,deviceNumber")
+                        .whereOr("deviceCode", deviceCode)
+                        .whereOr("hostDeviceId", deviceEntity.id);
+                if (StringUtil.isNotEmpty(deviceEntity.simCode)) nd.whereOr("simCode", deviceEntity.simCode);
 
+                List<Map<String, Object>> list = nd.select();
+
+                if (list != null && !list.isEmpty()) {
+                    List<Object> ids = new LinkedList<>();
+                    for (Map<String, Object> map : list) {
+                        long id_temp = MapUtil.getLong(map, "id");
+                        String deviceCode_temp = MapUtil.getString(map, "deviceCode");
+                        String deviceNumber_temp = MapUtil.getString(map, "deviceNumber");
+
+                        DataService.getMainCache().del(String.format("Device:%s:Details", deviceCode_temp));
+                        DataService.getMainCache().del(String.format("Device:%s:Details", deviceNumber_temp));
+
+                        ids.add(id_temp);
+                    }
+
+                    nd = new DeviceEntity();
+                    nd.whereIn("id", ids).update(set_data);
+                    LogsUtil.info(getClass().getSimpleName(), "设备appChannelCode更新为%s，相关缓存已清理。", appChannelCode);
+                    return true;
+                }
+            }
+
+            deviceEntity.where("deviceCode", deviceEntity.deviceCode).update(set_data);
             DataService.getMainCache().del(String.format("Device:%s:Details", deviceEntity.deviceCode));
             DataService.getMainCache().del(String.format("Device:%s:Details", deviceEntity.deviceNumber));
 

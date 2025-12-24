@@ -207,7 +207,6 @@ public class DeviceEntity extends BaseEntity implements Serializable {
      * 读取设备信息（优先从缓存中读取）
      *
      * @param deviceCode 设备码
-     * @return
      */
     public DeviceEntity getWithDeviceCode(String deviceCode) {
         return getWithDeviceCode(deviceCode, true);
@@ -218,7 +217,6 @@ public class DeviceEntity extends BaseEntity implements Serializable {
      *
      * @param deviceCode 设备码
      * @param inCache    是否优先读取缓存
-     * @return
      */
     public DeviceEntity getWithDeviceCode(String deviceCode, boolean inCache) {
         DeviceEntity deviceEntity = DeviceEntity.getInstance();
@@ -231,7 +229,6 @@ public class DeviceEntity extends BaseEntity implements Serializable {
      * 读取主机设备信息
      *
      * @param simCode SIM编码
-     * @return
      */
     public DeviceEntity getHostWithSimCode(String simCode) {
         return getWithDeviceCode(simCode, true);
@@ -242,7 +239,6 @@ public class DeviceEntity extends BaseEntity implements Serializable {
      *
      * @param simCode SIM编码
      * @param inCache 是否优先读取缓存
-     * @return
      */
     public DeviceEntity getHostWithSimCode(String simCode, boolean inCache) {
         DeviceEntity deviceEntity = DeviceEntity.getInstance();
