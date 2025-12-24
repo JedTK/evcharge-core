@@ -55,6 +55,10 @@ public class ACTConfigEntity extends BaseEntity implements Serializable {
      */
     public String remark;
     /**
+     * 调试级别：0=关闭,1=基础,2=详细,3=全量,;
+     */
+    public int debug_level;
+    /**
      * 创建时间戳,;
      */
     public long create_time;

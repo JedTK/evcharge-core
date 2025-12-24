@@ -432,7 +432,6 @@ public class ChargeOrderEntity extends BaseEntity implements Serializable {
      * @param OrderSN        充电订单号
      * @param stopReasonCode 停止代码
      * @param stopReasonText 停止原因
-     * @return
      */
     public SyncResult tryChargeFinish(String OrderSN, int stopReasonCode, String stopReasonText) {
         //查找充电订单数据
@@ -449,7 +448,6 @@ public class ChargeOrderEntity extends BaseEntity implements Serializable {
      * @param orderEntity    充电订单
      * @param stopReasonCode 停止代码
      * @param stopReasonText 停止原因
-     * @return
      */
     public SyncResult tryChargeFinish(@NonNull ChargeOrderEntity orderEntity, int stopReasonCode, String stopReasonText) {
         if (!StringUtils.hasLength(OrderSN)) return new SyncResult(2, "请选择订单");
@@ -638,37 +636,37 @@ public class ChargeOrderEntity extends BaseEntity implements Serializable {
 
         // region 2025-04-09 农业银行活动短信通知，临时使用
 
-        ThreadUtil.getInstance().execute("农业银行活动短信通知", () -> {
-            long uid = orderEntity.uid;
-
-            // 限制30天推送一次
-            int abcBankSMSNotify = DataService.getMainCache().getInt(String.format("Activity:ABCBank:SMS:%s", uid), -1);
-            if (abcBankSMSNotify == 1) return;
-
-            // 查询用户信息
-            UserEntity userEntity = UserEntity.getInstance().findUserByUid(uid);
-            if (userEntity == null) {
-                LogsUtil.warn("农业银行活动SMS推送", "无法找到用户信息 uid=%s", uid);
-                return;
-            }
-            if (StringUtil.isEmpty(userEntity.phone)) {
-                LogsUtil.warn("农业银行活动SMS推送", "用户手机号码为空值 uid=%s", uid);
-                return;
-            }
-
-            // 发送短信
-            JSONObject notifyTransData = new JSONObject();
-            notifyTransData.put("accept_list", userEntity.phone);
-            notifyTransData.put("platform_code", "genkigo");
-            notifyTransData.put("organize_code", "genkigo");
-            NotifyService.getInstance().asyncPush(String.format("%s", uid)
-                    , "CHARGE.END.ACTIVITY.PUSH"
-                    , ENotifyType.SMS
-                    , notifyTransData
-            );
-
-            DataService.getMainCache().set(String.format("Activity:ABCBank:SMS:%s", uid), 1, ECacheTime.MONTH);
-        });
+//        ThreadUtil.getInstance().execute("农业银行活动短信通知", () -> {
+//            long uid = orderEntity.uid;
+//
+//            // 限制30天推送一次
+//            int abcBankSMSNotify = DataService.getMainCache().getInt(String.format("Activity:ABCBank:SMS:%s", uid), -1);
+//            if (abcBankSMSNotify == 1) return;
+//
+//            // 查询用户信息
+//            UserEntity userEntity = UserEntity.getInstance().findUserByUid(uid);
+//            if (userEntity == null) {
+//                LogsUtil.warn("农业银行活动SMS推送", "无法找到用户信息 uid=%s", uid);
+//                return;
+//            }
+//            if (StringUtil.isEmpty(userEntity.phone)) {
+//                LogsUtil.warn("农业银行活动SMS推送", "用户手机号码为空值 uid=%s", uid);
+//                return;
+//            }
+//
+//            // 发送短信
+//            JSONObject notifyTransData = new JSONObject();
+//            notifyTransData.put("accept_list", userEntity.phone);
+//            notifyTransData.put("platform_code", "genkigo");
+//            notifyTransData.put("organize_code", "genkigo");
+//            NotifyService.getInstance().asyncPush(String.format("%s", uid)
+//                    , "CHARGE.END.ACTIVITY.PUSH"
+//                    , ENotifyType.SMS
+//                    , notifyTransData
+//            );
+//
+//            DataService.getMainCache().set(String.format("Activity:ABCBank:SMS:%s", uid), 1, ECacheTime.MONTH);
+//        });
 
         // endregion
 

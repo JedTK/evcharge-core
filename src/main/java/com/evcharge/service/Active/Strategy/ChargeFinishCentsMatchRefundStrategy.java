@@ -13,7 +13,6 @@ import com.xyzs.entity.SyncResult;
 import com.xyzs.utils.JsonUtil;
 import com.xyzs.utils.StringUtil;
 import com.xyzs.utils.TimeUtil;
-import com.xyzs.utils.common;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -138,7 +137,7 @@ public class ChargeFinishCentsMatchRefundStrategy implements IACTStrategy {
          *
          * 注意：此处示例直接使用 totalAmount；若需要可通过配置 amountField 动态选择字段。
          */
-        BigDecimal amount = new BigDecimal(orderEntity.totalAmount);
+        BigDecimal amount = new BigDecimal(orderEntity.totalAmount).setScale(2, RoundingMode.DOWN);
 
         /*
          * 8) 金额区间过滤
@@ -146,10 +145,10 @@ public class ChargeFinishCentsMatchRefundStrategy implements IACTStrategy {
          * 不满足过滤条件属于“正常不参与”，返回 -1 以避免日志膨胀。
          */
         if (minAmount != null && amount.compareTo(minAmount) < 0) {
-            return new SyncResult(-1, "未命中：金额小于minAmount");
+            return new SyncResult(-1, String.format("未命中：金额小于%s", minAmount));
         }
         if (maxAmount != null && amount.compareTo(maxAmount) > 0) {
-            return new SyncResult(-1, "未命中：金额大于maxAmount");
+            return new SyncResult(-1, String.format("未命中：金额大于%s", minAmount));
         }
 
         /*

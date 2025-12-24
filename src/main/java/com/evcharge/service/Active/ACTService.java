@@ -11,6 +11,7 @@ import com.xyzs.entity.ISyncResult;
 import com.xyzs.entity.SyncResult;
 import com.xyzs.utils.*;
 import lombok.NonNull;
+import org.apache.logging.log4j.Level;
 
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -190,12 +191,7 @@ public class ACTService {
                 String activity_code = MapUtil.getString(data, "activity_code");
                 ISyncResult r = triggerByActivateCode(activity_code, scene_code, uid, biz_key, params);
                 if (r.isSuccess()) success++;
-                else {
-                    // -1 表示跳过，不作为异常；其他非 0 记录 warn
-//                    if (r.getCode() != -1) LogsUtil.warn(TAG, "[%s] - %s", activity_code, r.getMsg());
-                    LogsUtil.warn(TAG, "[%s] - %s", activity_code, r.getMsg());
-                    error++;
-                }
+                else error++;
             }
 
             // 回调数据：用于业务侧了解本次触发执行情况
@@ -295,18 +291,13 @@ public class ACTService {
         try {
             // 执行策略：由策略内部判断是否“命中/不命中”，并返回统一 ISyncResult
             ISyncResult r = strategy.execute(ctx);
-
-            // code=-1：属于正常跳过，不记日志
-            if (r.getCode() == -1) return r;
-
-                // 非 0：表示失败或异常分支，通常需要告警/排查
-            else if (r.getCode() != 0) {
-                LogsUtil.warn(TAG, "[%s] - %s", activity_code, r.getMsg());
+            if (!r.isSuccess()) {
+                log(r, cfg.debug_level, "[%s-%s][%s] - %s", activity_code, cfg.title, biz_key, r.getMsg());
                 return r;
             }
 
             // 成功：记录一条业务日志，方便人工排查与运营对账
-            LogsUtil.info(TAG, "用户：%s 在[%s]中参与了活动[%s-%s] - %s 策略：%s"
+            log(r, cfg.debug_level, "用户：%s 在[%s]中参与了活动[%s-%s] - %s 策略：%s"
                     , ctx.uid
                     , ctx.scene_code
                     , cfg.activity_code
@@ -332,5 +323,47 @@ public class ACTService {
             LogsUtil.error(e, TAG, "调用触发器过程中发生错误");
         }
         return new SyncResult(1, "");
+    }
+
+    /**
+     * 记录流程日志
+     * <p>
+     * debug_level：0=关闭,1=基础(成功/关键节点),2=详细(包含未命中/分支),3=全量(最啰嗦，包含更多细节)
+     * <p>
+     * 约定：
+     * - code==0      : 成功
+     * - code==-1     : 未命中/跳过（可按你业务定义）
+     * - code!=0 && !=-1 : 异常/失败
+     */
+    private static void log(ISyncResult r, int debug_level, String msg, Object... args) {
+        if (debug_level <= 0 || r == null) return;
+
+        final int code = r.getCode();
+
+        // 是否允许输出：级别越高包含越多（推荐用 >= 语义）
+        final boolean isOk = (code == 0);
+        final boolean isSkip = (code == -1);
+        final boolean isErr = (!isOk && !isSkip);
+
+        // 输出门槛：你可以按团队习惯调整
+        // 1: 只输出成功/关键节点
+        // 2: 输出成功 + 未命中/分支 + 异常
+        // 3: 全量（最啰嗦）
+        boolean allow = (debug_level >= 1 && isOk) ||
+                (debug_level >= 2 && isSkip) ||
+                (debug_level >= 2 && isErr) ||
+                (debug_level >= 3); // 兜底：3 永远输出
+
+        if (!allow) return;
+
+        // 日志级别：成功用 info，未命中用 debug/trace 更合适，异常用 warn/error
+        if (isErr) {
+            LogsUtil.error(TAG, msg, args);
+        } else if (isSkip) {
+            // 如果没有 debug，就用 info（不建议用 warn）
+            LogsUtil.warn(TAG, msg, args);
+        } else {
+            LogsUtil.info(TAG, msg, args);
+        }
     }
 }
