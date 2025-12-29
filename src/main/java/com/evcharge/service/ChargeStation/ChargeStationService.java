@@ -13,7 +13,6 @@ import com.evcharge.enumdata.ENotifyType;
 import com.evcharge.mqtt.XMQTTFactory;
 import com.evcharge.service.meter.TQ4GMeterService;
 import com.evcharge.service.notify.NotifyService;
-import com.evcharge.task.monitor.check.Device;
 import com.xyzs.entity.DataService;
 import com.xyzs.entity.ISyncResult;
 import com.xyzs.entity.SyncResult;
