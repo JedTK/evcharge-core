@@ -87,6 +87,14 @@ public class ConsumeProductsEntity extends BaseEntity implements Serializable {
      */
     public int can_refund;
     /**
+     * 是否在活动页显示 0=不显示 1=显示,;
+     */
+    public int can_sale;
+    /**
+     * 是否在支付宝系活动页显示 0=不显示 1=显示,;
+     */
+    public int can_sale_alipay;
+    /**
      * 排序,;
      */
     public int sort;

@@ -24,6 +24,10 @@ public class CmsArticleEntity extends BaseEntity implements Serializable{
      */
     public int status ;
     /**
+     * 是否在支付宝小程序显示 0=不显示 1=显示,;
+     */
+    public int show_alipay;
+    /**
      * 图片链接
      */
     public String banner ;
