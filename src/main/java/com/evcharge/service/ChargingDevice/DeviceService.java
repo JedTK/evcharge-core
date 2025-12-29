@@ -51,78 +51,71 @@ public class DeviceService {
         if (StringUtil.isEmpty(deviceCode)) return false;
         if (StringUtil.isEmpty(simCode)) return false;
 
+        deviceCode = deviceCode.trim();
+        simCode = simCode.trim();
+
         try {
             DeviceEntity deviceEntity = DeviceEntity.getInstance().getWithDeviceCode(deviceCode);
             if (deviceEntity == null) return false;
 
             Map<String, Object> setData = new LinkedHashMap<>();
-            boolean sameSim = simCode.equalsIgnoreCase(deviceEntity.simCode);
 
-            // 1) 主机逻辑
+            // ✅ 1) 防 NPE 的 sameSim（同时建议做 trim，避免不可见字符导致“看起来一样其实不一样”）
+            String oldSim = deviceEntity.simCode == null ? "" : deviceEntity.simCode.trim();
+            boolean sameSim = simCode.equalsIgnoreCase(oldSim);
+
             if (deviceEntity.isHost == 1) {
-                // 主机：sim 一样就不用动，直接成功
-                if (sameSim) {
-                    return true;
-                }
-                // 主机只更新自己的 simCode，不动 CSId
+                if (sameSim) return true;
                 setData.put("simCode", simCode);
-
             } else {
-                // 2) 从机 / 非主机逻辑
-
-                // 尝试通过 simCode 找主机 —— 找不到也不视为失败
                 DeviceEntity hostDeviceEntity = DeviceEntity.getInstance().getHostWithSimCode(simCode);
 
-                // (可选) 找到主机就顺带维护 hostDeviceId
                 if (hostDeviceEntity != null) {
-                    // hostDeviceId 不同时才更新，避免无谓更新
                     if (!java.util.Objects.equals(deviceEntity.hostDeviceId, hostDeviceEntity.id)) {
                         setData.put("hostDeviceId", hostDeviceEntity.id);
                     }
 
-                    // 除了 AP262-L-4G / AP262-BL 之外的设备，同步 CSId 为主机的 CSId
                     if (!StringUtil.isEmpty(hostDeviceEntity.CSId)
                             && !"0".equalsIgnoreCase(hostDeviceEntity.CSId)
                             && !"AP262-L-4G".equals(deviceEntity.spuCode)
-                            && !"AP262-BL".equals(deviceEntity.spuCode)
-                    ) {
-                        // 只有当 CSId 真正不一致时才更新
+                            && !"AP262-BL".equals(deviceEntity.spuCode)) {
+
                         if (deviceEntity.CSId == null || !hostDeviceEntity.CSId.equalsIgnoreCase(deviceEntity.CSId)) {
                             setData.put("CSId", hostDeviceEntity.CSId);
                         }
                     }
                 }
 
-                // 从机：无论主机是否存在，只要 sim 不一样就要更新 simCode
                 if (!sameSim) setData.put("simCode", simCode);
-
-                // 如果 sim 一样，但上面因为 hostDeviceId / CSId 有改变，仍然会执行 update；
-                // 如果什么字段都没变，下面会直接 return true。
             }
 
-            // 如果没有任何字段需要更新，认为当前已是正确状态
+            // ✅ 2) 兜底：如果 setData 里只有 simCode，且值没变 -> 不更新
+            // （顺手也能防未来有人误改逻辑）
+            if (setData.containsKey("simCode")) {
+                String newSim = String.valueOf(setData.get("simCode"));
+                boolean stillSame = newSim != null && newSim.trim().equalsIgnoreCase(oldSim);
+                if (stillSame) {
+                    setData.remove("simCode");
+                }
+            }
+
             if (setData.isEmpty()) return true;
 
-            // 更新设备信息
             DeviceEntity.getInstance()
                     .where("deviceCode", deviceCode)
                     .update(setData);
 
-            LogsUtil.info(TAG, "[%s] SIM更新：%s → %s，更新字段：%s"
+            LogsUtil.info(TAG, "[%s] 设备更新：更新字段=%s"
                     , deviceCode
-                    , deviceEntity.simCode
-                    , simCode
                     , new JSONObject(setData).toJSONString()
             );
 
-            // 同步更新通用设备数据，这里只同步 simCode（且仅在本次确实更新了 simCode 时才同步）
             if (setData.containsKey("simCode")) {
                 Map<String, Object> generalData = new LinkedHashMap<>();
                 generalData.put("simCode", simCode);
                 DeviceGeneralDataEntity.getInstance().updateData(deviceCode, generalData);
             }
 
-            // 清理设备详情缓存
             DataService.getMainCache().del(String.format("Device:%s:Details", deviceCode));
             return true;
         } catch (Exception e) {
@@ -130,7 +123,6 @@ public class DeviceService {
             return false;
         }
     }
-
 
     /**
      * 自动更新设备的程序渠道编码。

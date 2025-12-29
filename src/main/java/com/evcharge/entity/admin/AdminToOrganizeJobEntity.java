@@ -54,7 +54,6 @@ public class AdminToOrganizeJobEntity extends BaseEntity implements Serializable
      *
      * @param admin_id           管理员ID
      * @param organizeJob_idList 组织职位ID列表
-     * @return
      */
     public SyncResult bind(long admin_id, String organizeJob_idList) {
         return this.beginTransaction(connection -> bindTransaction(connection, admin_id, organizeJob_idList));
@@ -65,7 +64,6 @@ public class AdminToOrganizeJobEntity extends BaseEntity implements Serializable
      *
      * @param admin_id           管理员ID
      * @param organizeJob_idList 组织职位ID列表
-     * @return
      */
     public SyncResult bindTransaction(Connection connection, long admin_id, String organizeJob_idList) {
         //检查参数是否为空
@@ -81,7 +79,7 @@ public class AdminToOrganizeJobEntity extends BaseEntity implements Serializable
             List<Map<String, Object>> list = RBJobEntity.getInstance().field("id")
                     .whereIn("id", organizeJob_idList)
                     .selectTransaction(connection);
-            if (list.size() == 0) return new SyncResult(5, "没有可绑定的职位");
+            if (list.isEmpty()) return new SyncResult(5, "没有可绑定的职位");
 
             //删除已移除的组织职位
             this.where("admin_id", admin_id)
@@ -122,7 +120,6 @@ public class AdminToOrganizeJobEntity extends BaseEntity implements Serializable
      *
      * @param admin_id           管理员ID
      * @param organizeJob_idList 权限列表ID
-     * @return
      */
     public SyncResult unBind(long admin_id, String organizeJob_idList) {
         return this.beginTransaction(connection -> unBindTransaction(connection, admin_id, organizeJob_idList));
@@ -133,7 +130,6 @@ public class AdminToOrganizeJobEntity extends BaseEntity implements Serializable
      *
      * @param admin_id           管理员ID
      * @param organizeJob_idList 权限列表ID
-     * @return
      */
     public SyncResult unBindTransaction(Connection connection, long admin_id, String organizeJob_idList) {
         //检查参数是否为空

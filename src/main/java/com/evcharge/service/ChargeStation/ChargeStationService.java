@@ -13,19 +13,22 @@ import com.evcharge.enumdata.ENotifyType;
 import com.evcharge.mqtt.XMQTTFactory;
 import com.evcharge.service.meter.TQ4GMeterService;
 import com.evcharge.service.notify.NotifyService;
+import com.evcharge.task.monitor.check.Device;
 import com.xyzs.entity.DataService;
 import com.xyzs.entity.ISyncResult;
 import com.xyzs.entity.SyncResult;
 import com.xyzs.utils.*;
+import lombok.NonNull;
 import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.ss.util.CellRangeAddress;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
-import org.springframework.lang.NonNull;
 import org.springframework.util.StringUtils;
 
 import java.io.FileOutputStream;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.sql.Connection;
+import java.sql.SQLException;
 import java.text.SimpleDateFormat;
 import java.util.*;
 
@@ -507,7 +510,7 @@ public class ChargeStationService {
     /**
      * 导出站点数据、投建成本、每月的充值、消费金额、电费、分润等数据
      */
-    public void exportFinanceData20241118(@NonNull String CSIds, long start_time, long end_time, String out_path) {
+    public void exportFinanceData20241118(@NonNull String CSIds, long start_time, long end_time, @NonNull String out_path) {
         String TAG = "财务数据v20241118-站点统计表";
         LogsUtil.info(TAG, "开始导出文件操作");
         // 创建 Excel 工作簿
@@ -956,71 +959,336 @@ public class ChargeStationService {
     }
 
     /**
-     * 绑定新主机
+     * 站点解绑设备（支持：仅主机 / 仅从机 / 主机 + 从机）
      * <p>
-     * 业务语义：
-     * 1. 每个站点只能有一个主机设备（isHost=1）。
-     * 2. 调用该方法时，先解绑旧的主机，再把新的设备绑定到指定站点。
-     * 3. 为保险起见，还会更新同一 simCode 下的从机设备，让它们也绑定到新主机所在站点。
+     * 规则说明：
+     * 1) 解绑从机：
+     * - 从站点移除：CSId 置为 "0"
+     * - 清空主从关系：hostDeviceId 置 0
+     * <p>
+     * 2) 解绑主机：
+     * - 主机从站点移除：CSId 置为 "0"，hostDeviceId 置 0
+     * - 默认不解绑从机的站点归属（从机 CSId 保持不变）
+     * - 但会做安全修复：将同站点内 hostDeviceId 指向该旧主机的从机 hostDeviceId 置 0
+     * <p>
+     * 3) 全流程在一个事务中执行，确保要么全部成功，要么全部回滚
+     * <p>
+     * 安全性建议：
+     * - 默认严格校验：传入设备必须属于该站点，否则返回错误，避免误解绑
      *
-     * @param CSId          站点编号
-     * @param device_number 主机设备物理编号（唯一标识设备）
-     * @return ISyncResult  结果对象，包含状态码和提示信息
+     * @param CSId             站点编号
+     * @param deviceNumberList 需要解绑的设备物理编号列表
+     * @return 结果对象，code=0 表示成功
      */
-    public ISyncResult bindNewHostDevice(String CSId, String device_number) {
-        // 参数校验：必须传站点编号
+    public ISyncResult unbindDevice(@NonNull String CSId, @NonNull String[] deviceNumberList) {
         if (StringUtil.isEmpty(CSId)) return new SyncResult(2, "请选择站点");
-        // 参数校验：必须传设备编号
-        if (StringUtil.isEmpty(device_number)) return new SyncResult(2, "请输入设备物理编号");
+        if (deviceNumberList == null || deviceNumberList.length == 0) return new SyncResult(2, "请输入设备物理编号");
 
-        // 根据物理编号查询要绑定的新主机
-        DeviceEntity newHost = DeviceEntity.getInstance()
-                .where("deviceNumber", device_number)
+        ChargeStationEntity station = ChargeStationEntity.getInstance()
+                .where("CSId", CSId)
                 .findEntity();
-        if (newHost == null || newHost.id == 0) {
-            return new SyncResult(2, "设备物理编号不正确，无法找到设备数据");
+        if (station == null || station.id == 0) return new SyncResult(3, "不存在此站点");
+
+        // 输入清洗：去空、去重
+        LinkedHashSet<String> dnSet = new LinkedHashSet<>();
+        for (String dn : deviceNumberList) {
+            if (!StringUtil.isEmpty(dn)) dnSet.add(dn.trim());
+        }
+        if (dnSet.isEmpty()) return new SyncResult(2, "请输入设备物理编号");
+        String[] dnArr = dnSet.toArray(new String[0]);
+
+        // 一次性查出所有输入设备
+        List<DeviceEntity> inputDevices = DeviceEntity.getInstance()
+                .whereIn("deviceNumber", dnArr)
+                .selectList();
+        if (inputDevices == null || inputDevices.isEmpty()) {
+            return new SyncResult(4, "设备物理编号不正确，未找到设备数据");
         }
 
-        // 幂等判断：如果新主机已经是该站点的主机，直接返回成功，避免重复绑定
-        if (CSId.equalsIgnoreCase(newHost.CSId) && newHost.isHost == 1) {
-            return new SyncResult(0, "已是当前站点主机，无需重复绑定");
+        // 检查缺失编号
+        LinkedHashSet<String> found = new LinkedHashSet<>();
+        for (DeviceEntity d : inputDevices) {
+            if (d != null && !StringUtil.isEmpty(d.deviceNumber)) found.add(d.deviceNumber);
+        }
+        List<String> missing = new ArrayList<>();
+        for (String dn : dnArr) {
+            if (!found.contains(dn)) missing.add(dn);
+        }
+        if (!missing.isEmpty()) {
+            return new SyncResult(4, "以下设备编号未找到：" + String.join(",", missing));
         }
 
-        // 查询该站点当前绑定的旧主机（isHost=1）
-        DeviceEntity oldHostDeviceEntity = DeviceEntity.getInstance()
+        // 严格校验：必须属于该站点（避免误解绑其它站点设备）
+        List<String> notBelong = new ArrayList<>();
+        for (DeviceEntity d : inputDevices) {
+            if (d == null) continue;
+            if (!CSId.equalsIgnoreCase(d.CSId)) {
+                notBelong.add(d.deviceNumber);
+            }
+        }
+        if (!notBelong.isEmpty()) {
+            return new SyncResult(5, "以下设备不属于该站点，禁止解绑：" + String.join(",", notBelong));
+        }
+
+        // 判断本次是否包含主机（且最多只能有一台）
+        DeviceEntity inputHost = null;
+        for (DeviceEntity d : inputDevices) {
+            if (d != null && d.isHost == 1) {
+                if (inputHost != null) return new SyncResult(4, "本次解绑存在多台主机，应一站点一主机");
+                inputHost = d;
+            }
+        }
+        DeviceEntity finalInputHost = inputHost;
+
+        return DataService.getMainDB().beginTransaction(connection -> {
+
+            // 记录旧主机信息，用于安全修复从机 hostDeviceId
+            long oldHostId = (finalInputHost != null && finalInputHost.id != 0) ? finalInputHost.id : 0;
+
+            // 1) 解绑本次输入的从机：CSId="0", hostDeviceId=0
+            Map<String, Object> setSlaveUnbind = new LinkedHashMap<>();
+            setSlaveUnbind.put("CSId", "0");
+            setSlaveUnbind.put("hostDeviceId", 0);
+
+            DeviceEntity.getInstance()
+                    .whereIn("deviceNumber", dnArr)
+                    .where("isHost", 0)
+                    .updateTransaction(connection, setSlaveUnbind);
+
+            // 2) 若本次包含主机：解绑主机（但不解绑站点内其它从机的 CSId）
+            if (finalInputHost != null && finalInputHost.id != 0) {
+                Map<String, Object> setHostUnbind = new LinkedHashMap<>();
+                setHostUnbind.put("CSId", "0");
+                setHostUnbind.put("hostDeviceId", 0);
+
+                int n = DeviceEntity.getInstance()
+                        .where("deviceNumber", finalInputHost.deviceNumber)
+                        .where("isHost", 1)
+                        .where("CSId", CSId)
+                        .updateTransaction(connection, setHostUnbind);
+                if (n == 0) return new SyncResult(6, "解绑主机失败，请重试");
+
+                // 3) 安全修复：站点内仍保留的从机，如果 hostDeviceId 指向该旧主机，则清零
+                // 注意：不改 CSId，保证从机仍留在站点可用
+                if (oldHostId > 0) {
+                    Map<String, Object> setSlaveDetach = new LinkedHashMap<>();
+                    setSlaveDetach.put("hostDeviceId", 0);
+
+                    DeviceEntity.getInstance()
+                            .where("CSId", CSId)
+                            .where("isHost", 0)
+                            .where("hostDeviceId", oldHostId)
+                            .updateTransaction(connection, setSlaveDetach);
+                }
+            }
+
+            return new SyncResult(0, "");
+        });
+    }
+
+    /**
+     * 站点绑定设备（支持：仅主机 / 仅从机 / 主机 + 从机）
+     * <p>
+     * 规则说明：
+     * 1) 本次包含主机：
+     * - 先执行换主机流程：解绑站点旧主机，绑定新主机到该站点
+     * - 再将本次传入的从机绑定到该站点，并指向最终主机（hostDeviceId）
+     * <p>
+     * 2) 本次不包含主机：
+     * - 若站点已有主机：将从机绑定到该站点，并指向该主机
+     * - 若站点没有主机：仅绑定站点（CSId），hostDeviceId 置 0
+     * <p>
+     * 3) 全流程在一个事务中执行，确保要么全部成功，要么全部回滚
+     * <p>
+     * 注意：
+     * - 仅对本次传入的从机设备进行绑定更新，不做 simCode 全量迁移，避免 simCode 撞号误绑
+     *
+     * @param CSId             站点编号
+     * @param deviceNumberList 设备物理编号列表（可包含主机和从机）
+     * @return 结果对象，code=0 表示成功
+     */
+    public ISyncResult bindDevice(@NonNull String CSId, @NonNull String[] deviceNumberList) {
+        if (StringUtil.isEmpty(CSId)) return new SyncResult(2, "请选择站点");
+        if (deviceNumberList == null || deviceNumberList.length == 0) return new SyncResult(2, "请输入设备物理编号");
+
+        // 站点校验
+        ChargeStationEntity station = ChargeStationEntity.getInstance()
+                .where("CSId", CSId)
+                .findEntity();
+        if (station == null || station.id == 0) return new SyncResult(3, "不存在此站点");
+
+        // 输入清洗：去空、去重（避免重复 SQL，也避免空编号误操作）
+        LinkedHashSet<String> dnSet = new LinkedHashSet<>();
+        for (String dn : deviceNumberList) {
+            if (!StringUtil.isEmpty(dn)) dnSet.add(dn.trim());
+        }
+        if (dnSet.isEmpty()) return new SyncResult(2, "请输入设备物理编号");
+
+        String[] dnArr = dnSet.toArray(new String[0]);
+
+        // 一次性查出所有输入设备
+        List<DeviceEntity> inputDevices = DeviceEntity.getInstance()
+                .whereIn("deviceNumber", dnArr)
+                .selectList();
+        if (inputDevices == null || inputDevices.isEmpty()) {
+            return new SyncResult(4, "设备物理编号不正确，未找到设备数据");
+        }
+
+        // 检查是否有缺失编号（传了但查不到）
+        // 这里给出更明确的提示，减少误绑定
+        LinkedHashSet<String> found = new LinkedHashSet<>();
+        for (DeviceEntity d : inputDevices) {
+            if (d != null && !StringUtil.isEmpty(d.deviceNumber)) found.add(d.deviceNumber);
+        }
+        List<String> missing = new ArrayList<>();
+        for (String dn : dnArr) {
+            if (!found.contains(dn)) missing.add(dn);
+        }
+        if (!missing.isEmpty()) {
+            return new SyncResult(4, "以下设备编号未找到：" + String.join(",", missing));
+        }
+
+        // 判断本次输入是否包含主机（且最多只能有一台）
+        DeviceEntity inputHost = null;
+        for (DeviceEntity d : inputDevices) {
+            if (d != null && d.isHost == 1) {
+                if (inputHost != null) return new SyncResult(4, "本次绑定存在多台主机，应一站点一主机");
+                inputHost = d;
+            }
+        }
+
+        DeviceEntity finalInputHost = inputHost;
+
+        return DataService.getMainDB().beginTransaction(connection -> {
+
+            // 事务中读取站点当前主机（如 ORM 支持，建议加 for update 锁）
+            DeviceEntity stationFinalHost = DeviceEntity.getInstance()
+                    .where("CSId", CSId)
+                    .where("isHost", 1)
+                    .findEntity();
+
+            // 若本次带主机，先执行换主机
+            if (finalInputHost != null) {
+                ISyncResult sw = bindHostDevice(connection, CSId, finalInputHost.deviceNumber);
+                if (sw.getCode() != 0) return new SyncResult(sw.getCode(), sw.getMsg());
+
+                // 最终主机就是本次输入的主机
+                stationFinalHost = finalInputHost;
+                stationFinalHost.CSId = CSId;
+            }
+
+            // 绑定从机到站点 + 主机（若不存在主机则 hostDeviceId=0）
+            long hostId = (stationFinalHost != null && stationFinalHost.id != 0) ? stationFinalHost.id : 0;
+
+            Map<String, Object> setSlave = new LinkedHashMap<>();
+            setSlave.put("CSId", CSId);
+            setSlave.put("hostDeviceId", hostId);
+
+            DeviceEntity.getInstance()
+                    .whereIn("deviceNumber", dnArr)
+                    .where("isHost", 0)
+                    .updateTransaction(connection, setSlave);
+
+            return new SyncResult(0, "");
+        });
+    }
+
+    /**
+     * 更换/绑定站点主机
+     * <p>
+     * 语义说明：
+     * 1) 查询站点当前旧主机（isHost=1）
+     * 2) 若新主机已是该站点主机：直接返回成功（幂等）
+     * 3) 解绑旧主机（将 CSId 置为 "0"；并清空 hostDeviceId）
+     * 4) 绑定新主机到目标站点（CSId=目标站点；hostDeviceId=0）
+     * 5) 兜底改绑从机：
+     * - 仅改绑“同站点 + 原来挂在旧主机下”的从机
+     * - 不做 simCode 全量迁移，避免 simCode 撞号导致误绑
+     * <p>
+     * 重要约束建议：
+     * - 默认不允许抢占其它站点正在使用的主机。
+     * 如果 newHost.CSId 既不是 "0" 也不是目标 CSId，则直接返回错误，要求先做解绑/迁站操作。
+     *
+     * @param connection          事务连接
+     * @param CSId                目标站点编号
+     * @param newHostDeviceNumber 新主机设备物理编号
+     * @return 结果对象，code=0 表示成功
+     */
+    private ISyncResult bindHostDevice(
+            Connection connection,
+            @NonNull String CSId,
+            @NonNull String newHostDeviceNumber
+    ) throws SQLException {
+        if (StringUtil.isEmpty(CSId)) return new SyncResult(2, "请选择站点");
+        if (StringUtil.isEmpty(newHostDeviceNumber)) return new SyncResult(2, "请输入设备物理编号");
+
+        DeviceEntity newHost = DeviceEntity.getInstance()
+                .where("deviceNumber", newHostDeviceNumber)
+                .findEntity();
+        if (newHost == null || newHost.id == 0) return new SyncResult(2, "设备物理编号不正确，无法找到设备数据");
+        if (newHost.isHost != 1) return new SyncResult(2, "该设备不是主机设备，无法作为站点主机绑定");
+
+        // 防止“抢占其它站点主机”
+        // 说明：你们用 "0" 代表未绑定站点
+        if (!StringUtil.isEmpty(newHost.CSId)
+                && !"0".equalsIgnoreCase(newHost.CSId)
+                && !"".equalsIgnoreCase(newHost.CSId)
+                && !CSId.equalsIgnoreCase(newHost.CSId)) {
+            return new SyncResult(5, String.format("该主机[%s]已绑定其他站点，不能直接更换，请先解绑或迁站", newHostDeviceNumber));
+        }
+
+        DeviceEntity oldHost = DeviceEntity.getInstance()
                 .where("CSId", CSId)
                 .where("isHost", 1)
                 .findEntity();
 
-        // 启动事务，确保解绑旧主机和绑定新主机是原子操作
-        return DataService.getMainDB().beginTransaction(connection -> {
-            // 1. 解绑旧主机：把 CSId 更新为 "0"
-            if (oldHostDeviceEntity != null && oldHostDeviceEntity.id != 0) {
+        // 幂等：新主机已经是该站点主机
+        if (oldHost != null && oldHost.id != 0 && oldHost.deviceNumber.equalsIgnoreCase(newHostDeviceNumber)) {
+            if (!CSId.equalsIgnoreCase(newHost.CSId)) {
+                Map<String, Object> setHost = new LinkedHashMap<>();
+                setHost.put("CSId", CSId);
+                setHost.put("hostDeviceId", 0);
+
                 DeviceEntity.getInstance()
-                        .where("deviceNumber", oldHostDeviceEntity.deviceNumber)
-                        .updateTransaction(connection, new HashMap<>() {{
-                            put("CSId", "0");
-                        }});
+                        .where("deviceNumber", newHostDeviceNumber)
+                        .updateTransaction(connection, setHost);
             }
+            return new SyncResult(0, "已是当前站点主机，无需重复绑定");
+        }
 
-            // 2. 绑定新主机：把它的 CSId 更新为目标站点
-            int noquery = DeviceEntity.getInstance()
-                    .where("deviceNumber", device_number)
-                    .updateTransaction(connection, new HashMap<>() {{
-                        put("CSId", CSId);
-                    }});
-            if (noquery == 0) return new SyncResult(3, "绑定新主机失败，请重试");
+        // 解绑旧主机
+        if (oldHost != null && oldHost.id != 0) {
+            Map<String, Object> setOld = new LinkedHashMap<>();
+            setOld.put("CSId", "0");
+            setOld.put("hostDeviceId", 0);
 
-            // 3. 更新从机：同一个 simCode 的设备（主从关系）绑定到同一站点
-            //    一般情况下从机会自动绑定到主机，但这里额外做一次兜底更新
             DeviceEntity.getInstance()
-                    .where("simCode", newHost.simCode)
-                    .updateTransaction(connection, new HashMap<>() {{
-                        put("CSId", CSId);
-                    }});
+                    .where("deviceNumber", oldHost.deviceNumber)
+                    .updateTransaction(connection, setOld);
+        }
 
-            // 成功返回
-            return new SyncResult(0, "");
-        });
+        // 绑定新主机
+        Map<String, Object> setNew = new LinkedHashMap<>();
+        setNew.put("CSId", CSId);
+        setNew.put("hostDeviceId", 0);
+
+        int n = DeviceEntity.getInstance()
+                .where("deviceNumber", newHostDeviceNumber)
+                .updateTransaction(connection, setNew);
+        if (n == 0) return new SyncResult(3, "绑定新主机失败，请重试");
+
+        // 兜底改绑从机：只处理“同站点 + 旧主机名下的从机”
+        if (oldHost != null && oldHost.id != 0) {
+            Map<String, Object> setSlaveRebind = new LinkedHashMap<>();
+            setSlaveRebind.put("hostDeviceId", newHost.id);
+
+            DeviceEntity.getInstance()
+                    .where("CSId", CSId)
+                    .where("isHost", 0)
+                    .where("hostDeviceId", oldHost.id)
+                    .updateTransaction(connection, setSlaveRebind);
+        }
+
+        return new SyncResult(0, "");
     }
 }

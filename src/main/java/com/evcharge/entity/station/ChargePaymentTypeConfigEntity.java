@@ -45,8 +45,6 @@ public class ChargePaymentTypeConfigEntity extends BaseEntity implements Seriali
 
     /**
      * 获得一个实例
-     *
-     * @return
      */
     public static ChargePaymentTypeConfigEntity getInstance() {
         return new ChargePaymentTypeConfigEntity();
@@ -89,8 +87,6 @@ public class ChargePaymentTypeConfigEntity extends BaseEntity implements Seriali
      * 获取充电扣款方式
      * 1、先查询全局默认开启的充电支付方式
      * 2、再查询对应充电桩的充电支付方式（优先启用）
-     *
-     * @return
      */
     public SyncResult getConfig(String deviceCode) {
         if (!StringUtils.hasLength(deviceCode)) return new SyncResult(2, "请选择设备");
