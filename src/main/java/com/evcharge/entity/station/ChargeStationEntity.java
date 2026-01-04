@@ -247,6 +247,21 @@ public class ChargeStationEntity extends BaseEntity implements Serializable {
     }
 
     /**
+     * 通过DeviceNumber查询充电桩信息
+     *
+     * @param deviceNumber 设备编码
+     * @return 充电桩信息
+     */
+    public ChargeStationEntity getWithDeviceNumber(String deviceNumber) {
+        return this.field("a.*")
+                .cache(String.format("ChargeStation:Device:Numbers:%s", deviceNumber))
+                .alias("a")
+                .join(DeviceEntity.getInstance().theTableName(), "b", "a.CSId = b.CSId")
+                .where("b.deviceNumber", deviceNumber)
+                .findEntity();
+    }
+
+    /**
      * 通过DeviceCode查询充电桩信息名称
      *
      * @param deviceCode 设备编码
