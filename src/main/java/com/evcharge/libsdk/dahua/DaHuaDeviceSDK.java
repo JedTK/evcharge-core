@@ -120,9 +120,9 @@ public class DaHuaDeviceSDK {
 
             data.put("deviceName", deviceName);
             data.put("serialNumber", deviceId);
-            data.put("spuCode", ""); //产品SPU代码
-            data.put("brandCode", ""); //品牌编码
-            data.put("typeCode", ""); //类型编码
+            data.put("spuCode", "P4A-4G"); //产品SPU代码
+            data.put("brandCode", "dahuatech"); //品牌编码
+            data.put("typeCode", "4GNVR"); //类型编码
             data.put("online_status", onloadStatus);
             data.put("status", 1);
             data.put("simCode", simCode);//SIM编码
