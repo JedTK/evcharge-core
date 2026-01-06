@@ -82,7 +82,10 @@ public class RBOrganizeEntity extends BaseEntity implements Serializable {
      * 备注
      */
     public String remark;
-
+    /**
+     * 组织编码
+     */
+    public String home_url;
     /**
      * 创建者id
      */

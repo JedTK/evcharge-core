@@ -218,8 +218,10 @@ public class AdminBaseEntity extends BaseEntity implements Serializable {
         //region 20240702 查询用户组织信息
         AdminToOrganizeEntity adminToOrganizeEntity = AdminToOrganizeEntity.getInstance().where("admin_id", admin_id).findEntity();
         if (adminToOrganizeEntity != null) {
+            RBOrganizeEntity rbOrganizeEntity = RBOrganizeEntity.getInstance().where("code", adminToOrganizeEntity.organize_code).findEntity();
             adminCacheData.put("organize_code", adminToOrganizeEntity.organize_code);
             cbdata.put("organize_code", adminToOrganizeEntity.organize_code);
+            cbdata.put("home_url", rbOrganizeEntity.home_url);
         } else {
             adminCacheData.put("organize_code", 0);
             cbdata.put("organize_code", 0);
