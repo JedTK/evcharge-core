@@ -168,7 +168,7 @@ public class DeviceService {
 
                     nd = new DeviceEntity();
                     nd.whereIn("id", ids).update(set_data);
-                    LogsUtil.info(getClass().getSimpleName(), "设备appChannelCode更新为%s，相关缓存已清理。", appChannelCode);
+                    LogsUtil.info(TAG, "设备appChannelCode更新为%s", appChannelCode);
                     return true;
                 }
             }
@@ -177,10 +177,10 @@ public class DeviceService {
             DataService.getMainCache().del(String.format("Device:%s:Details", deviceEntity.deviceCode));
             DataService.getMainCache().del(String.format("Device:%s:Details", deviceEntity.deviceNumber));
 
-            LogsUtil.info(getClass().getSimpleName(), "设备appChannelCode更新为%s，相关缓存已清理。", appChannelCode);
+            LogsUtil.info(TAG, "设备appChannelCode更新为%s", appChannelCode);
             return true;
         } catch (Exception e) {
-            LogsUtil.error(getClass().getSimpleName(), "更新设备渠道编码失败", e);
+            LogsUtil.error(TAG, "更新设备渠道编码失败", e);
             return false;
         }
     }
