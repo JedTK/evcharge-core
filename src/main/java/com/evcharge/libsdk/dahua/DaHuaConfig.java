@@ -28,6 +28,13 @@ public class DaHuaConfig {
     public static final String deviceListUrl = String.format("%s%s", BaseUrl, "/open-api/api-iot/device/getDeviceList");
 
     /**
+     * 查询设备在线状态
+     *  <a href="https://open.cloud-dahua.com/platform/develop/doccenter/doc?d=1715313431302x1754380551329">...</a>
+     */
+    public static final String deviceOnlineUrl= String.format("%s%s", BaseUrl, "/open-api/api-iot/device/deviceOnline");
+
+
+    /**
      * 查询单SIM卡设备的SIM、IMEI信息
      * <a href="https://open.cloud-dahua.com/platform/develop/doccenter/doc?d=1715313431302x1745554275682">...</a>
      */
