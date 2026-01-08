@@ -6,9 +6,13 @@ import com.evcharge.entity.device.GeneralDeviceConfigEntity;
 import com.evcharge.entity.device.GeneralDeviceEntity;
 import com.evcharge.entity.station.ChargeStationEntity;
 import com.evcharge.entity.sys.SysGlobalConfigEntity;
+import com.evcharge.enumdata.ENotifyType;
+import com.evcharge.service.GeneralDevice.GeneralDeviceService;
+import com.evcharge.service.notify.NotifyService;
 import com.xyzs.entity.SyncResult;
 import com.xyzs.utils.Http2Util;
 import com.xyzs.utils.LogsUtil;
+import com.xyzs.utils.MapUtil;
 import com.xyzs.utils.TimeUtil;
 import org.springframework.util.StringUtils;
 
@@ -162,151 +166,22 @@ public class DaHuaDeviceSDK {
         // 建议增加去重逻辑（例如：如果数据库里已经是离线状态，就不要重复发通知了，避免消息轰炸）
         // int currentStatus = device.online_status;
         // if (currentStatus != 0) { 发送通知... }
+        String whiteList="";
+        JSONObject notifyData = new JSONObject();
+        notifyData.put("title", device.deviceName);
+        // 一般用于常规的日志发送：企业微信机器人消息
+        NotifyService.getInstance().asyncPush(device.serialNumber
+                , "SYSTEM.DAHUA.MONITOR.OFFLINE"
+                , ENotifyType.WECHATCORPBOT
+                , notifyData
+                , GeneralDeviceService.iNotifyServiceTransDataBuilder
+                , null
+                , String.format("Notify:Throttle:%s:WindAlarm", device.serialNumber)
+        );
+
+
         LogsUtil.info(this.getClass().getName(), "发现设备离线，准备发送通知: " + device.deviceName);
     }
-
-
-//
-//    /**
-//     * 获取设备列表
-//     */
-//    public void getDeviceList() {
-//        DaHuaAuthSDK daHuaAuthSDK = new DaHuaAuthSDK();
-//        Map<String, Object> param = new HashMap<>();
-//        param.put("pageNum", 1);
-//        param.put("pageSize", 100);
-//        String url = DaHuaConfig.deviceListUrl;
-//        Map<String, Object> header = daHuaAuthSDK.createHeader(param);
-//        String text = Http2Util.post(url, param, header, "application/json");
-//
-//        if (!StringUtils.hasLength(text)) {
-//            return;
-//        }
-//        JSONObject jsonObject = JSONObject.parseObject(text);
-//        if (!jsonObject.getString("code").equals("200")) {
-//            LogsUtil.info(this.getClass().getName(), "【大华云联】获取设备列表失败，失败原因：" + jsonObject.getString("msg"));
-//            return;
-//        }
-//
-//        JSONArray jsonArray = jsonObject.getJSONObject("data").getJSONArray("pageData").getJSONObject(0).getJSONArray("deviceList");
-//
-//        if (jsonArray.isEmpty()) return;
-//
-//        for (int i = 0; i < jsonArray.size(); i++) {
-////            {
-////                "modelId": "",
-////                    "catalog": "SD",
-////                    "deviceCatalog": "SD",
-////                    "channelNum": 1,
-////                    "deviceVersion": "2.820.0000017.0.R.250821",
-////                    "source": "share",
-////                    "deviceId": "AC0A84BRAJ00761",
-////                    "deviceName": "东莞市江南农副产品批发市场站3",
-////                    "deviceStatus": "online",
-////                    "accessType": "PaaS",
-////                    "deviceAbility": "MT,HSEncrypt,CloudStorage,LocalStorage,PlaybackByFilename,BreathingLight,LocalRecord,XUpgrade,Auth,ModifyPassword,LocalStorageEnable,Siren,WhiteLight,ESV1,PlaySound,Reboot,LinkDevAlarm,AbAlarmSound,SCCode,CustomRing,RDV2,RTSV2,PBSV2,TLSEnable,CK,WLV2,SirenTime,LRRF,DHPenetrate,DevReset,MSGSW,SIMV1,SMSCSS,SIMSS,SMSCASV1,CloudStorageRestrict,AlarmMD,PT,AudioEncodeControl,FrameReverse,MDW,MDS,HeaderDetect,CollectionPoint,SmartTrack,WideDynamic,CheckAbDecible,PT1,NVM,LEDS,Preset,PTZAC,SBPD,PTZRESET,NoIris,AlarmSchedule,SMDV,AudioTalk",
-////                    "playInfo": "6ynkx7+gWj2AUK/rxrJwhpWzwRRhRnBv6d8xb896GVTwcUrDMzw9CTCmsvk7eh6xcfX3NM0EdbsOVBrzH1ZmTXpYPXL0s5xi8KTSjoAYaJ8ClahkH+ULn0arYbs/CO3nNwo7h+zDtxBmEWRgb2RI32L1XgxtEFxO6AC/wrfsL3lkQtdsv367WsSy+Q7xcbnv5HVCQJBjVcwHRkVvsLMnUpg6VgroiYxnbQ+WP08mv1Ln9yLbiQB94m9dL9vUXJ5fDxzercmMH/o39OSg9G+kukcgQTrrtioWXojJZcefNgL2IQUOJvzAUsLHPWAtxn0SoDw82ZDgAPj1PuExTZaJ6TZFhz8GBZqXfVpx7ROgpL9gjMV7ZzKdAUolBK9x2dRO1voLh5/OFPzapTKaVSYRRftU0AqC8a8nLeynKfxHYuGQAFl1qwkCHZJ62KSdxsVjao27tMaFyTf59TzfXzZuvvNxFcwRrh2o8GohXEPX0eYwR57GhE1WdWhoZyow4JI298hCNK38Ev0qjeZ5X4bTipz8BzeudWvqjKTSqag75PJPmpfizG0esKjU0PrYLKm3BADoA/AluIIiMIejK7ebqKu3S15XYpvfw4X2OmEAF1xkDCeV8va+7AwbhxgtUmNYhsPfG/dHj9/xtYPf4P0SusZP27EbTCP5KMhOhS7bNYmNjoODjXDcOhiGemL3nJzQOi+PY9HpNmiwvgwCDxs+E0KH/OtvMI7ymXWUvfhW2r/tBcgD3Dcj0Wxjv/gAuuUp81uISNqWme717XLxVUzZUcsHh/ETyihUoZBIJIHFv/DTYtzWNUNJIYjFAko2W4B9lgZJ+LWu7etYB/f0ld2Nd0CzZEnOkL5E2kTU7inn+JqcMvHAAASIdZlA6NQVLe1o/sOcEtNQnYhQa3dQ+qH2WN+bqH+upChlR5Y7YzmjqZPO3+cqK6UZOKQ6ocwQ5KafyQMrAJYSmiRvGe5hxq5cm1FK1NrKaw/+j5318zmiYtGveWFZmjVXetsym+TXA9Q1mv+3mgUqZtIs5ah+1ogt5F9F50JJQX2vxzu4JnDU0IMz1jTwlyd4ywn3pCwqP2xkdnqax2dNQ5I06JIh3VGVHzzUKI0qFiR0ItXBEfBKcOThV/DmTs+TCikalqe51d/Ge+Fw0st+EvgrkZWgwBOxE4+u9dF/CbJqZj+5aP9xUaw47BaqhRnYymZb5qal+7KH5u0b8ku4FY96o/meIVufK9xWi5GpKaLZZ34HE6PkR1qUnTSXbVlnVCu9hoxfxBqbi4Gkg0ljn2/wzM/4ACP7BTU2I9zernXZxyDSum6AGfg3oFdda9UEOamGRvldfNRW/K2abyuu7rrJar6oAkiqjEH5PtqSyEN6aYjvLzFlq0A7p4pc6Oq3uaCDIzxtM6Mj+lF9Td0l8kCWfHu4bueFueWoL09LWPUEHDC0CnDgbLd/qg5oTLHSbjcWjtvzbPsV6PstMA3U063rrqM6w/Hbk5F49wwkjzrvfAZ0MksneAksJAV4+oY0hyMp6ERWdDCN/mZOIXrZtdL3B23qbf3GfwYGnQsVMAqR4c+/KgnyTOEGmrqw9clU1i6v4QzpJtOYoUkFgi7zeLf9zzz9UJcsDoY+hDoD9YuapVpTI+D2HTREVwhbB3AmRGjHnH+4fIMOSQAxizzoxRdY46ZvPzIBShfuW6zY1e2FkFT5XN8ZfNwt9XZ5e7gyT9COxl6aqaw4W+4h3XTGqfFx+MCxg9ouBRCAzm10WYvD4Bh9kuMj8RAauWXvkmzTCHwzWYRoOW3l",
-////                    "channels": [
-////{
-////                    "csStatus": null,
-////                        "shareFunctions": null,
-////                        "lastOffLineTime": "20260106T004325Z",
-////                        "channelName": "东莞市江南农副产品批发市场站3",
-////                        "channelStatus": "online",
-////                        "channelAbility": "MT,HSEncrypt,CloudStorage,LocalStorage,PlaybackByFilename,BreathingLight,LocalRecord,XUpgrade,Auth,ModifyPassword,LocalStorageEnable,Siren,WhiteLight,ESV1,PlaySound,Reboot,LinkDevAlarm,AbAlarmSound,SCCode,CustomRing,RDV2,RTSV2,PBSV2,TLSEnable,CK,WLV2,SirenTime,LRRF,DHPenetrate,DevReset,MSGSW,SIMV1,SMSCSS,SIMSS,SMSCASV1,CloudStorageRestrict,AlarmMD,PT,AudioEncodeControl,FrameReverse,MDW,MDS,HeaderDetect,CollectionPoint,SmartTrack,WideDynamic,CheckAbDecible,PT1,NVM,LEDS,Preset,PTZAC,SBPD,PTZRESET,NoIris,AlarmSchedule,SMDV,AudioTalk",
-////                        "channelPicUrl": null,
-////                        "channelId": "0"
-////                }
-////],
-////                "encryptMode": "0",
-////                    "lastOffLineTime": "20260106T004324Z",
-////                    "deviceModel": "DH-P4A-4G",
-////                    "canBeUpgrade": false,
-////                    "brand": "general",
-////                    "secondCategoryCode": "SD"
-////            }
-//
-//            JSONObject deviceObject = jsonArray.getJSONObject(i);
-//
-//            String deviceId = deviceObject.getString("deviceId");
-//
-//            String CSId = "";
-//            String simCode = "";
-//            String deviceName = deviceObject.getString("deviceName");
-//            String deviceStatus = deviceObject.getString("deviceStatus");
-//            String deviceModel = deviceObject.getString("deviceModel");
-//            int onloadStatus = 0; //默认离线状态
-//
-//            switch (deviceStatus) {
-//                case "online":
-//                    onloadStatus = 1;
-//                    break;
-//                case "sleep":
-//                    onloadStatus = 2;
-//                    break;
-//                case "upgrading升级中":
-//                    onloadStatus = 3;
-//                    break;
-//                default:
-//                    break;
-//            }
-//            SyncResult simCodeResult = getDeviceSimCode(deviceId);
-//            if (simCodeResult.code == 0) {
-//                simCode = (String) simCodeResult.getData();
-//            }
-//
-//            Map<String, Object> data = new LinkedHashMap<>();
-//            GeneralDeviceEntity generalDeviceEntity = GeneralDeviceEntity.getInstance().getBySerialNumber(deviceId, false);
-//
-//            if (generalDeviceEntity != null) {
-//
-//                data.put("deviceName", deviceName);
-//                data.put("spuCode", deviceModel); //产品SPU代码
-//                data.put("online_status", onloadStatus);
-//                data.put("update_time", TimeUtil.getTimestamp());
-//                data.put("simCode", simCode);//SIM编码
-//                /**
-//                 * TODO
-//                 * 如果onloadStatus 不为1 则判断摄像头离线，需要添加企业微信通知
-//                 */
-//                if (!StringUtils.hasLength(generalDeviceEntity.CSId)) {
-//                    ChargeStationEntity chargeStationEntity = ChargeStationEntity.getInstance().where("name", deviceName).findEntity();
-//                    if (chargeStationEntity != null) {
-//                        CSId = chargeStationEntity.CSId;
-//                        data.put("CSId", CSId);
-//                    }
-//                }
-//                GeneralDeviceEntity.getInstance().where("id", generalDeviceEntity.id).update(data);
-//                continue;
-//            } else {
-//                ChargeStationEntity chargeStationEntity = ChargeStationEntity.getInstance().where("name", deviceName).findEntity();
-//                if (chargeStationEntity != null) {
-//                    CSId = chargeStationEntity.CSId;
-//                }
-//            }
-//
-//            data.put("deviceName", deviceName);
-//            data.put("serialNumber", deviceId);
-//            data.put("CSId", CSId);
-//            data.put("spuCode", deviceModel); //产品SPU代码
-//            data.put("brandCode", "dahuatech"); //品牌编码
-//            data.put("typeCode", "4GNVR"); //类型编码
-//            data.put("online_status", onloadStatus);
-//            data.put("status", 1);
-//            data.put("simCode", simCode);//SIM编码
-//            data.put("batchNumber", "");//批次号
-//            data.put("spec", JSONObject.toJSONString(deviceObject));//规格
-//            data.put("dynamic_info", "");//动态信息
-//            data.put("organize_code", this.organizeCode);//组织代码
-//            data.put("platform_code", this.organizeCode);//充电平台代码
-//            data.put("create_time", TimeUtil.getTimestamp());//充电平台代码
-//            data.put("update_time", TimeUtil.getTimestamp());
-//            GeneralDeviceEntity.getInstance().insertGetId(data);
-//
-//        }
-//
-//    }
-
 
     //
 
