@@ -16,10 +16,7 @@ import com.xyzs.utils.MapUtil;
 import com.xyzs.utils.TimeUtil;
 import org.springframework.util.StringUtils;
 
-import java.util.HashMap;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 public class DaHuaDeviceSDK {
 
@@ -161,12 +158,16 @@ public class DaHuaDeviceSDK {
     /**
      * 辅助方法：处理离线通知
      */
-    private void sendOffLineNotification(GeneralDeviceEntity device) {
+    public void sendOffLineNotification(GeneralDeviceEntity device) {
         // TODO: 实现企业微信通知逻辑
         // 建议增加去重逻辑（例如：如果数据库里已经是离线状态，就不要重复发通知了，避免消息轰炸）
         // int currentStatus = device.online_status;
         // if (currentStatus != 0) { 发送通知... }
-        String whiteList="";
+        List<String> whiteList=new ArrayList<>();
+        whiteList.add("P4A-4G");
+        if(whiteList.contains(device.deviceName)){
+            return;
+        }
         JSONObject notifyData = new JSONObject();
         notifyData.put("title", device.deviceName);
         // 一般用于常规的日志发送：企业微信机器人消息
@@ -178,7 +179,6 @@ public class DaHuaDeviceSDK {
                 , null
                 , String.format("Notify:Throttle:%s:WindAlarm", device.serialNumber)
         );
-
 
         LogsUtil.info(this.getClass().getName(), "发现设备离线，准备发送通知: " + device.deviceName);
     }
