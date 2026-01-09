@@ -48,7 +48,7 @@ public class TQ4GMeterService {
     /**
      * 批量执行抄表任务
      *
-     * @param use_mq
+     * @param use_mq 是否使用MQ
      */
     public void readTask(boolean use_mq) {
         int page = 1;
@@ -222,17 +222,18 @@ public class TQ4GMeterService {
     // region remark - 电表闸门操作
 
     /**
+     * 发送MQTT闸门操作
      *
-     * @param serialNumber
-     * @param status
-     * @param keep_alive
-     * @param appChannelCode
+     * @param serialNumber   设备号
+     * @param status         闸门状态：0=断电，1=通电
+     * @param keep_alive     （可选）保电操作：0=解除保电，1=保电
+     * @param appChannelCode 设备通道编码
      */
     public void sendMQTTGateSwitch(String serialNumber, int status, int keep_alive, String appChannelCode) {
         JSONObject requestBody = new JSONObject();
         requestBody.put("serialNumber", serialNumber);
         requestBody.put("status", status); // 0=断电，1=通电
-        requestBody.put("keep_alive", keep_alive); // 0=解除保电，1=保电
+        requestBody.put("keep_alive", keep_alive); // -1=不操作，0=解除保电，1=保电
 
         // 主题格式：{appChannelCode}/{deviceCode}/command/gateOp
         XMQTTFactory.getInstance().publish(
@@ -247,7 +248,6 @@ public class TQ4GMeterService {
      *
      * @param serialNumber 序列号
      * @param mqttMessage  mqtt消息 {"serialNumber":"862538063484766","status":1,"keep_alive":1}
-     * @return
      */
     public void gateSwitch(String serialNumber, JSONObject mqttMessage) {
         String notify_url = SysGlobalConfigEntity.getString("TQMeter.GateSwitch.NotifyUrl");
@@ -290,7 +290,6 @@ public class TQ4GMeterService {
      *
      * @param serialNumber 序列号
      * @param mqttMessage  mqtt消息 {"serialNumber":"862538063484766","status":1,"keep_alive":1}
-     * @return
      */
     public void keepAlive(String serialNumber, JSONObject mqttMessage) {
         String notify_url = SysGlobalConfigEntity.getString("TQMeter.GateSwitch.NotifyUrl");
@@ -325,8 +324,6 @@ public class TQ4GMeterService {
 
     /**
      * 电表通/断电操作回调
-     *
-     * @return
      */
     public void gateSwitchCallback() {
         // 1. 获取回调参数
